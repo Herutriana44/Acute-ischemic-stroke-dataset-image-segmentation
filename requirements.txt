@@ -7,3 +7,9 @@ torchvision>=0.15.0
 segmentation-models-pytorch>=0.3.3
 albumentations>=1.4.0
 tqdm>=4.65.0
+
+# DICOM inference pipeline (infer_dicom_unet.py)
+pydicom>=2.4.4
+nibabel>=5.2.1
+scikit-image>=0.22.0
+matplotlib>=3.8.0

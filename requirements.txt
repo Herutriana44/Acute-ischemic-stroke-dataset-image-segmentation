@@ -13,3 +13,5 @@ pydicom>=2.4.4
 nibabel>=5.2.1
 scikit-image>=0.22.0
 matplotlib>=3.8.0
+Flask>=3.0.0
+patool>=2.0.0

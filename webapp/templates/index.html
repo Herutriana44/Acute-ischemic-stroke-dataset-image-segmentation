@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Upload DICOM Archive{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Upload Archive DICOM</h2>
+  <p>Format didukung: zip, rar, tar, tar.gz, tgz, 7z, dll. Struktur di dalam archive mengikuti contoh `0019983/CT/*.dcm`.</p>
+  <form action="{{ url_for('predict') }}" method="post" enctype="multipart/form-data" class="upload-form">
+    <input type="file" name="dicom_archive" accept=".zip,.rar,.tar,.gz,.tgz,.bz2,.xz,.7z" required>
+    <button type="submit">Run Inference & Visualize</button>
+  </form>
+</section>
+{% endblock %}

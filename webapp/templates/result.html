@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Hasil Inference{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Hasil Inference</h2>
+  <div class="metrics-grid">
+    <div><strong>Run ID</strong><span>{{ result.run_id }}</span></div>
+    <div><strong>DICOM Series</strong><span>{{ result.dicom_dir }}</span></div>
+    <div><strong>Output</strong><span>{{ result.out_dir }}</span></div>
+    <div><strong>Slice</strong><span>{{ result.slices }}</span></div>
+    <div><strong>Resolusi Slice</strong><span>{{ result.shape_hw[0] }} x {{ result.shape_hw[1] }}</span></div>
+    <div><strong>Spacing (row,col,z)</strong><span>{{ result.spacing }}</span></div>
+    <div><strong>Lesion Voxels</strong><span>{{ result.lesion_voxels }}</span></div>
+    <div><strong>Lesion Volume</strong><span>{{ result.lesion_volume_mm3 }} mm3 ({{ result.lesion_volume_ml }} mL)</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Visualisasi 3D</h2>
+  <p>Objek abu-abu: kontur volume CT. Objek merah: area prediksi lesi.</p>
+  <div id="viewer3d" class="viewer"></div>
+</section>
+
+<section class="card">
+  <a href="{{ url_for('index') }}" class="button-link">Upload Data Lain</a>
+</section>
+
+<script id="mesh-data" type="application/json">{{ result|tojson }}</script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
+{% endblock %}

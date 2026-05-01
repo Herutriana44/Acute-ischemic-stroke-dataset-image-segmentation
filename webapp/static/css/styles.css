@@ -138,48 +138,6 @@ button,
   pointer-events: auto;
 }
 
-.slice-wrap {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #0b1220;
-  overflow: hidden;
-}
-
-.slice-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 12px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(16, 24, 40, 0.9);
-}
-
-.slice-label {
-  font-weight: 700;
-  color: var(--text);
-  min-width: 140px;
-}
-
-.slice-slider {
-  width: 100%;
-}
-
-.slice-stage {
-  display: grid;
-  place-items: center;
-  padding: 12px;
-  background: #070b14;
-}
-
-.slice-stage img {
-  width: min(860px, 100%);
-  height: auto;
-  image-rendering: pixelated;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: #000;
-}
-
 .metrics-grid {
   display: grid;
   gap: 10px;

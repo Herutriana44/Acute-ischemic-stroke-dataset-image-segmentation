@@ -23,23 +23,9 @@
 
 <section class="card">
   <h2>Visualisasi (Orthogonal Viewer)</h2>
-  <p>Menampilkan semua slice CT + overlay mask hasil prediksi. Gunakan slider untuk pindah slice.</p>
-  <div class="slice-wrap">
-    <div class="slice-toolbar">
-      <div id="slice-label" class="slice-label">Slice: -</div>
-      <input id="slice-slider" class="slice-slider" type="range" value="0">
-    </div>
-    <div class="slice-stage">
-      <img id="slice-img" alt="Slice overlay" />
-    </div>
-    <div
-      id="slice-host"
-      data-run-id="{{ result.run_id }}"
-      data-overlay-dir="{{ result.overlay_slices_dir }}"
-      data-slices="{{ result.slices }}"
-      data-base-url="{{ url_for('runs_file', run_id='__RUN__', filename='__FILE__')|replace('/runs/__RUN__/__FILE__','/runs') }}"
-      style="display:none"
-    ></div>
+  <p>Ditampilkan dengan Papaya (orthogonal viewer) dari data CT (hasil DICOM) + overlay mask prediksi.</p>
+  <div class="papaya-wrap">
+    <div class="papaya" data-params="papayaParams"></div>
   </div>
 </section>
 
@@ -50,5 +36,29 @@
 <script id="mesh-data" type="application/json">{{ result|tojson }}</script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
-<script src="{{ url_for('static', filename='js/slice_viewer.js') }}"></script>
+<script type="text/javascript">
+  var papayaParams = [];
+  papayaParams["worldSpace"] = false;
+  papayaParams["showOrientation"] = true;
+  papayaParams["showRuler"] = true;
+  papayaParams["smoothDisplay"] = false;
+  papayaParams["interpolation"] = "none";
+  papayaParams["images"] = [
+    "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii) }}",
+    "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}"
+  ];
+  papayaParams["{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii) }}"] = {
+    "min": 0,
+    "max": 255
+  };
+  papayaParams["{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}"] = {
+    "min": 0,
+    "max": 1,
+    "alpha": 0.45,
+    "lut": "Spectrum"
+  };
+</script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
+<script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 {% endblock %}

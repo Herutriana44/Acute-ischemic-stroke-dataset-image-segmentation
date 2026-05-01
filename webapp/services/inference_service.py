@@ -37,6 +37,8 @@ class InferenceResult:
     ct_nii: str
     ct_hu_nii: str
     mask_nii: str
+    ct_view_nii: str
+    mask_view_nii: str
     overlay_slices_dir: str
     lesion_voxels: int
     lesion_volume_mm3: float
@@ -133,6 +135,21 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     nib.save(nib.Nifti1Image(ct_u8, affine), str(ct_nii_path))
     nib.save(nib.Nifti1Image(masks.astype(np.uint8), affine), str(mask_nii_path))
 
+    # NIfTI khusus viewer Papaya:
+    # Papaya (dan kebanyakan viewer NIfTI) menganggap dim-3 sebagai axis slice (Z).
+    # Volume kita saat ini (Z,H,W). Untuk viewer yang konsisten, simpan sebagai (H,W,Z)
+    # dengan affine sederhana berbasis spacing.
+    ct_view_nii_path = out_dir / "ct_view_u8_hwz.nii.gz"
+    mask_view_nii_path = out_dir / "mask_view_hwz.nii.gz"
+    ct_hwz = ct_u8.transpose(1, 2, 0)  # (H,W,Z)
+    mask_hwz = masks.transpose(1, 2, 0)  # (H,W,Z)
+    affine_view = np.eye(4, dtype=np.float64)
+    affine_view[0, 0] = float(ps_col)
+    affine_view[1, 1] = float(ps_row)
+    affine_view[2, 2] = float(ps_z)
+    nib.save(nib.Nifti1Image(ct_hwz.astype(np.uint8), affine_view), str(ct_view_nii_path))
+    nib.save(nib.Nifti1Image(mask_hwz.astype(np.uint8), affine_view), str(mask_view_nii_path))
+
     # Save per-slice overlay PNGs for a deterministic 2D viewer.
     overlay_dir = out_dir / "overlay_slices"
     overlay_dir.mkdir(parents=True, exist_ok=True)
@@ -157,6 +174,8 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
         ct_nii=ct_nii_path.name,
         ct_hu_nii=ct_hu_nii_path.name,
         mask_nii=mask_nii_path.name,
+        ct_view_nii=ct_view_nii_path.name,
+        mask_view_nii=mask_view_nii_path.name,
         overlay_slices_dir=overlay_dir.name,
         lesion_voxels=lesion_vox,
         lesion_volume_mm3=round(lesion_mm3, 2),

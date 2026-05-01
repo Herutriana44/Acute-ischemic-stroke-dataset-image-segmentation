@@ -3,6 +3,7 @@
   if (!host) return;
 
   const ctUrl = host.getAttribute("data-ct-url");
+  const ctHuUrl = host.getAttribute("data-ct-hu-url");
   const maskUrl = host.getAttribute("data-mask-url");
   const runId = host.getAttribute("data-run-id") || "";
 
@@ -29,6 +30,7 @@
         <div style="margin-top:6px; opacity:0.9">${message}</div>
         <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap">
           <a class="button-link" href="${ctUrl}" target="_blank" rel="noreferrer">Download CT NIfTI</a>
+          ${ctHuUrl ? `<a class="button-link" href="${ctHuUrl}" target="_blank" rel="noreferrer">Download CT HU (float)</a>` : ""}
           <a class="button-link" href="${maskUrl}" target="_blank" rel="noreferrer">Download Mask NIfTI</a>
         </div>
       `;
@@ -65,15 +67,17 @@
   function startPapaya(ctBlobUrl, maskBlobUrl) {
     // Papaya expects a global params object.
     window.papayaParams = [];
-    window.papayaParams["worldSpace"] = true;
+    // worldSpace sering bikin tampilan "aneh/gelap" bila affine DICOM berbeda konvensi.
+    // Untuk viewer web, off lebih aman.
+    window.papayaParams["worldSpace"] = false;
     window.papayaParams["showOrientation"] = true;
     window.papayaParams["showRuler"] = true;
     window.papayaParams["smoothDisplay"] = false;
     window.papayaParams["interpolation"] = "none";
     window.papayaParams["images"] = [ctBlobUrl, maskBlobUrl];
 
-    // Improve default visibility for HU.
-    window.papayaParams[ctBlobUrl] = { min: -100, max: 200 };
+    // CT ditampilkan sebagai uint8 0..255 (hasil windowing), jadi pasti terlihat.
+    window.papayaParams[ctBlobUrl] = { min: 0, max: 255 };
     window.papayaParams[maskBlobUrl] = { min: 0, max: 1, alpha: 0.45, lut: "Spectrum" };
 
     host.innerHTML = `<div class="papaya" data-params="papayaParams"></div>`;

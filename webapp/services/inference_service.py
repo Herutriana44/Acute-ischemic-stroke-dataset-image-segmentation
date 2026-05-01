@@ -34,6 +34,7 @@ class InferenceResult:
     dicom_dir: str
     out_dir: str
     ct_nii: str
+    ct_hu_nii: str
     mask_nii: str
     lesion_voxels: int
     lesion_volume_mm3: float
@@ -122,9 +123,12 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     np.save(out_dir / "mask_pred.npy", masks)
 
     affine, _ = dicom_affine_from_slices(slices)
-    ct_nii_path = out_dir / "ct_hu.nii.gz"
+    ct_hu_nii_path = out_dir / "ct_hu.nii.gz"
+    ct_nii_path = out_dir / "ct_window_u8.nii.gz"
     mask_nii_path = out_dir / "mask_pred.nii.gz"
-    nib.save(nib.Nifti1Image(hu_vol.astype(np.float32), affine), str(ct_nii_path))
+    nib.save(nib.Nifti1Image(hu_vol.astype(np.float32), affine), str(ct_hu_nii_path))
+    ct_u8 = np.clip(vol01 * 255.0, 0, 255).round().astype(np.uint8)
+    nib.save(nib.Nifti1Image(ct_u8, affine), str(ct_nii_path))
     nib.save(nib.Nifti1Image(masks.astype(np.uint8), affine), str(mask_nii_path))
 
     result = InferenceResult(
@@ -132,6 +136,7 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
         dicom_dir=str(dicom_dir),
         out_dir=str(out_dir),
         ct_nii=ct_nii_path.name,
+        ct_hu_nii=ct_hu_nii_path.name,
         mask_nii=mask_nii_path.name,
         lesion_voxels=lesion_vox,
         lesion_volume_mm3=round(lesion_mm3, 2),

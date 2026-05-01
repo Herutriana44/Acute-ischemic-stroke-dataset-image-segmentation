@@ -33,6 +33,7 @@
       id="papaya-host"
       data-run-id="{{ result.run_id }}"
       data-ct-url="{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}"
+      data-ct-hu-url="{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_hu_nii) }}"
       data-mask-url="{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}"
     ></div>
   </div>

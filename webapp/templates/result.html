@@ -16,25 +16,29 @@
 </section>
 
 <section class="card">
+  <h2>Visualisasi 3D (DICOM + Mask)</h2>
+  <p>Objek abu-abu: kontur volume CT. Objek merah: area prediksi lesi.</p>
+  <div id="viewer3d" class="viewer"></div>
+</section>
+
+<section class="card">
   <h2>Visualisasi (Orthogonal Viewer)</h2>
-  <p>Viewer 3-view (axial/sagittal/coronal) dengan overlay mask prediksi, mirip Papaya Viewer.</p>
-  <div class="papaya-wrap">
-    <div class="papaya-loading">
-      <div class="papaya-loading-row">
-        <div id="papaya-status">Menyiapkan data...</div>
-        <div id="papaya-progress-pct">0%</div>
-      </div>
-      <div class="papaya-progress">
-        <div id="papaya-progress-bar" class="papaya-progress-bar"></div>
-      </div>
-      <div id="papaya-error" class="papaya-error" style="display:none"></div>
+  <p>Menampilkan semua slice CT + overlay mask hasil prediksi. Gunakan slider untuk pindah slice.</p>
+  <div class="slice-wrap">
+    <div class="slice-toolbar">
+      <div id="slice-label" class="slice-label">Slice: -</div>
+      <input id="slice-slider" class="slice-slider" type="range" value="0">
+    </div>
+    <div class="slice-stage">
+      <img id="slice-img" alt="Slice overlay" />
     </div>
     <div
-      id="papaya-host"
+      id="slice-host"
       data-run-id="{{ result.run_id }}"
-      data-ct-url="{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}"
-      data-ct-hu-url="{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_hu_nii) }}"
-      data-mask-url="{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}"
+      data-overlay-dir="{{ result.overlay_slices_dir }}"
+      data-slices="{{ result.slices }}"
+      data-base-url="{{ url_for('runs_file', run_id='__RUN__', filename='__FILE__')|replace('/runs/__RUN__/__FILE__','/runs') }}"
+      style="display:none"
     ></div>
   </div>
 </section>
@@ -43,7 +47,8 @@
   <a href="{{ url_for('index') }}" class="button-link">Upload Data Lain</a>
 </section>
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
-<script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
-<script src="{{ url_for('static', filename='js/papaya_loader.js') }}"></script>
+<script id="mesh-data" type="application/json">{{ result|tojson }}</script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/slice_viewer.js') }}"></script>
 {% endblock %}

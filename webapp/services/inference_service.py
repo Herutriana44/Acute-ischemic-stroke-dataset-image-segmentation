@@ -9,6 +9,7 @@ import numpy as np
 import nibabel as nib
 import torch
 from skimage.measure import marching_cubes
+from PIL import Image
 
 from infer_dicom_unet import (
     IMAGENET_MEAN,
@@ -36,6 +37,7 @@ class InferenceResult:
     ct_nii: str
     ct_hu_nii: str
     mask_nii: str
+    overlay_slices_dir: str
     lesion_voxels: int
     lesion_volume_mm3: float
     lesion_volume_ml: float
@@ -131,6 +133,23 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     nib.save(nib.Nifti1Image(ct_u8, affine), str(ct_nii_path))
     nib.save(nib.Nifti1Image(masks.astype(np.uint8), affine), str(mask_nii_path))
 
+    # Save per-slice overlay PNGs for a deterministic 2D viewer.
+    overlay_dir = out_dir / "overlay_slices"
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+    alpha = 0.35
+    for z in range(ct_u8.shape[0]):
+        gray = ct_u8[z]  # (H,W) uint8
+        rgb = np.stack([gray, gray, gray], axis=-1).astype(np.float32)
+        m = masks[z].astype(bool)
+        if m.any():
+            overlay = np.zeros_like(rgb)
+            overlay[..., 0] = 255.0  # red
+            overlay[..., 1] = 70.0
+            overlay[..., 2] = 70.0
+            rgb[m] = (1.0 - alpha) * rgb[m] + alpha * overlay[m]
+        img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8))
+        img.save(overlay_dir / f"{z:04d}.png", optimize=True)
+
     result = InferenceResult(
         run_id=run_id,
         dicom_dir=str(dicom_dir),
@@ -138,6 +157,7 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
         ct_nii=ct_nii_path.name,
         ct_hu_nii=ct_hu_nii_path.name,
         mask_nii=mask_nii_path.name,
+        overlay_slices_dir=overlay_dir.name,
         lesion_voxels=lesion_vox,
         lesion_volume_mm3=round(lesion_mm3, 2),
         lesion_volume_ml=round(lesion_ml, 4),

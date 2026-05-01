@@ -64,12 +64,13 @@ def create_app() -> Flask:
         if not files:
             files = sorted([p for p in dicom_dir.iterdir() if p.is_file()])
 
+        # IMPORTANT: return relative URLs to avoid mixed-content issues behind reverse proxies (e.g. ngrok).
+        # The browser will resolve them with the current page's scheme (HTTPS).
         urls = [
             url_for(
                 "runs_file",
                 run_id=run_id,
                 filename=f"dicom_series/{p.name}",
-                _external=True,
             )
             for p in files
         ]

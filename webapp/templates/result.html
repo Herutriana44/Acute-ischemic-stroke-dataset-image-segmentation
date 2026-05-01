@@ -46,8 +46,9 @@
 <script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 <script type="text/javascript">
   (function () {
-    var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id, _external=True) }}";
-    var overlayUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii, _external=True) }}";
+    // Use relative URLs to avoid mixed-content issues behind ngrok/HTTPS proxies.
+    var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
+    var overlayUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}";
 
     function bootPapaya(dicomUrls) {
       var params = [];

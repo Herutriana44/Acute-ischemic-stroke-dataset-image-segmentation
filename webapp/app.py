@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from flask import Flask, abort, flash, redirect, render_template, request, send_from_directory, url_for
+from flask import Flask, abort, flash, make_response, redirect, render_template, request, send_from_directory, url_for
 
 from webapp.services.archive_service import extract_archive, find_dicom_series_dir
 from webapp.services.inference_service import InferenceError, run_inference
@@ -36,7 +36,12 @@ def create_app() -> Flask:
         run_dir = (runs_dir / run_id).resolve()
         if runs_dir.resolve() not in run_dir.parents:
             abort(404)
-        return send_from_directory(run_dir, filename, as_attachment=False)
+        resp = send_from_directory(run_dir, filename, as_attachment=False, conditional=True, max_age=0)
+        # Make remote-viewer loads (ngrok) more reliable.
+        resp = make_response(resp)
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        return resp
 
     @app.route("/predict", methods=["POST"])
     def predict():

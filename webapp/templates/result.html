@@ -44,14 +44,14 @@
   papayaParams["smoothDisplay"] = false;
   papayaParams["interpolation"] = "none";
   papayaParams["images"] = [
-    "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii) }}",
-    "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}"
+    "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii, _external=True) }}",
+    "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii, _external=True) }}"
   ];
-  papayaParams["{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii) }}"] = {
+  papayaParams["{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii, _external=True) }}"] = {
     "min": 0,
     "max": 255
   };
-  papayaParams["{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}"] = {
+  papayaParams["{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii, _external=True) }}"] = {
     "min": 0,
     "max": 1,
     "alpha": 0.45,

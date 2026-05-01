@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, send_from_directory, url_for
 
 from webapp.services.archive_service import extract_archive, find_dicom_series_dir
 from webapp.services.inference_service import InferenceError, run_inference
@@ -26,6 +26,17 @@ def create_app() -> Flask:
     @app.route("/", methods=["GET"])
     def index():
         return render_template("index.html")
+
+    @app.route("/runs/<run_id>/<path:filename>", methods=["GET"])
+    def runs_file(run_id: str, filename: str):
+        runs_dir: Path = app.config["RUNS_DIR"]
+        safe_run_id = "".join([c for c in run_id if c.isalnum() or c in ("-", "_")])
+        if safe_run_id != run_id:
+            abort(404)
+        run_dir = (runs_dir / run_id).resolve()
+        if runs_dir.resolve() not in run_dir.parents:
+            abort(404)
+        return send_from_directory(run_dir, filename, as_attachment=False)
 
     @app.route("/predict", methods=["POST"])
     def predict():

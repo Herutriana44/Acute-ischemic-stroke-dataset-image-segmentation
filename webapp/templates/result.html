@@ -16,16 +16,36 @@
 </section>
 
 <section class="card">
-  <h2>Visualisasi 3D</h2>
-  <p>Objek abu-abu: kontur volume CT. Objek merah: area prediksi lesi.</p>
-  <div id="viewer3d" class="viewer"></div>
+  <h2>Visualisasi (Orthogonal Viewer)</h2>
+  <p>Viewer 3-view (axial/sagittal/coronal) dengan overlay mask prediksi, mirip Papaya Viewer.</p>
+  <div class="papaya-wrap">
+    <div class="papaya" data-params="papayaParams"></div>
+  </div>
 </section>
 
 <section class="card">
   <a href="{{ url_for('index') }}" class="button-link">Upload Data Lain</a>
 </section>
 
-<script id="mesh-data" type="application/json">{{ result|tojson }}</script>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-<script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
+<script>
+  var papayaParams = [];
+  papayaParams["worldSpace"] = true;
+  papayaParams["showOrientation"] = true;
+  papayaParams["showRuler"] = true;
+  papayaParams["smoothDisplay"] = false;
+  papayaParams["interpolation"] = "none";
+  papayaParams["images"] = [
+    "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}",
+    "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}",
+  ];
+  papayaParams["{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}"] = {
+    "min": 0,
+    "max": 1,
+    "alpha": 0.45,
+    "lut": "Spectrum"
+  };
+</script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
+<script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 {% endblock %}

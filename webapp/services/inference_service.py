@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
+import nibabel as nib
 import torch
 from skimage.measure import marching_cubes
 
@@ -32,6 +33,8 @@ class InferenceResult:
     run_id: str
     dicom_dir: str
     out_dir: str
+    ct_nii: str
+    mask_nii: str
     lesion_voxels: int
     lesion_volume_mm3: float
     lesion_volume_ml: float
@@ -118,10 +121,18 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     np.save(out_dir / "hu_volume.npy", hu_vol)
     np.save(out_dir / "mask_pred.npy", masks)
 
+    affine, _ = dicom_affine_from_slices(slices)
+    ct_nii_path = out_dir / "ct_hu.nii.gz"
+    mask_nii_path = out_dir / "mask_pred.nii.gz"
+    nib.save(nib.Nifti1Image(hu_vol.astype(np.float32), affine), str(ct_nii_path))
+    nib.save(nib.Nifti1Image(masks.astype(np.uint8), affine), str(mask_nii_path))
+
     result = InferenceResult(
         run_id=run_id,
         dicom_dir=str(dicom_dir),
         out_dir=str(out_dir),
+        ct_nii=ct_nii_path.name,
+        mask_nii=mask_nii_path.name,
         lesion_voxels=lesion_vox,
         lesion_volume_mm3=round(lesion_mm3, 2),
         lesion_volume_ml=round(lesion_ml, 4),

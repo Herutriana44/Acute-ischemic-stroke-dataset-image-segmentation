@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from flask import Flask, abort, flash, make_response, redirect, render_template, request, send_from_directory, url_for
+from flask import Flask, abort, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 
 from webapp.services.archive_service import extract_archive, find_dicom_series_dir
 from webapp.services.inference_service import InferenceError, run_inference
@@ -41,6 +41,40 @@ def create_app() -> Flask:
         resp = make_response(resp)
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["X-Content-Type-Options"] = "nosniff"
+        return resp
+
+    @app.route("/runs/<run_id>/dicom_manifest", methods=["GET"])
+    def dicom_manifest(run_id: str):
+        """Return JSON list of DICOM URLs for Papaya (no manual folder selection)."""
+        runs_dir: Path = app.config["RUNS_DIR"]
+        safe_run_id = "".join([c for c in run_id if c.isalnum() or c in ("-", "_")])
+        if safe_run_id != run_id:
+            abort(404)
+
+        run_dir = (runs_dir / run_id).resolve()
+        if runs_dir.resolve() not in run_dir.parents:
+            abort(404)
+
+        dicom_dir = run_dir / "dicom_series"
+        if not dicom_dir.exists() or not dicom_dir.is_dir():
+            abort(404)
+
+        files = sorted([p for p in dicom_dir.glob("*.dcm") if p.is_file()])
+        # Fallback: if extensions are missing, include all files.
+        if not files:
+            files = sorted([p for p in dicom_dir.iterdir() if p.is_file()])
+
+        urls = [
+            url_for(
+                "runs_file",
+                run_id=run_id,
+                filename=f"dicom_series/{p.name}",
+                _external=True,
+            )
+            for p in files
+        ]
+        resp = jsonify({"run_id": run_id, "count": len(urls), "dicom_urls": urls})
+        resp.headers["Cache-Control"] = "no-store"
         return resp
 
     @app.route("/predict", methods=["POST"])

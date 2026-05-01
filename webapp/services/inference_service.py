@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -40,6 +41,8 @@ class InferenceResult:
     ct_view_nii: str
     mask_view_nii: str
     overlay_slices_dir: str
+    dicom_series_dir: str
+    dicom_series_zip: str
     lesion_voxels: int
     lesion_volume_mm3: float
     lesion_volume_ml: float
@@ -85,6 +88,20 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
 
     out_dir = runs_dir / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy DICOM series into runs/<run_id>/dicom_series so it can be accessed by URL.
+    # This avoids the user needing to manually upload/select a DICOM folder in the viewer.
+    dicom_series_dir = out_dir / "dicom_series"
+    dicom_series_dir.mkdir(parents=True, exist_ok=True)
+    dicom_src = Path(dicom_dir)
+    dicom_files = sorted([p for p in dicom_src.glob("*.dcm") if p.is_file()])
+    if not dicom_files:
+        # If the series uses different extensions, we still keep the folder copy minimal by copying all files.
+        dicom_files = sorted([p for p in dicom_src.iterdir() if p.is_file()])
+    for fp in dicom_files:
+        shutil.copy2(fp, dicom_series_dir / fp.name)
+    dicom_zip_path = out_dir / "dicom_series.zip"
+    shutil.make_archive(str(dicom_zip_path.with_suffix("")), "zip", root_dir=str(dicom_series_dir))
 
     try:
         slices = load_dicom_series(dicom_dir)
@@ -177,6 +194,8 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
         ct_view_nii=ct_view_nii_path.name,
         mask_view_nii=mask_view_nii_path.name,
         overlay_slices_dir=overlay_dir.name,
+        dicom_series_dir=dicom_series_dir.name,
+        dicom_series_zip=dicom_zip_path.name,
         lesion_voxels=lesion_vox,
         lesion_volume_mm3=round(lesion_mm3, 2),
         lesion_volume_ml=round(lesion_ml, 4),

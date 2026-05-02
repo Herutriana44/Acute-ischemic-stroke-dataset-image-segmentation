@@ -178,7 +178,11 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     affine_view[1, 1] = float(ps_row)
     affine_view[2, 2] = float(ps_z)
     nib.save(nib.Nifti1Image(ct_hwz.astype(np.uint8), affine_view), str(ct_view_nii_path))
-    nib.save(nib.Nifti1Image(mask_hwz.astype(np.uint8), affine_view), str(mask_view_nii_path))
+    # Mask 0/255 untuk viewer (Papaya): rentang lebih lebar dari 0/1 agar overlay terbaca stabil.
+    nib.save(
+        nib.Nifti1Image((mask_hwz.astype(np.uint8) * 255), affine_view),
+        str(mask_view_nii_path),
+    )
 
     # Save per-slice overlay PNGs for a deterministic 2D viewer.
     overlay_dir = out_dir / "overlay_slices"

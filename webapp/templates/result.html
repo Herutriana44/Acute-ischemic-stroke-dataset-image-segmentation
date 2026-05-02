@@ -36,7 +36,7 @@
 
 <section class="card">
   <h2>Visualisasi (Orthogonal Viewer)</h2>
-  <p><strong>CT + mask (NIfTI)</strong> dipakai secara bawaan: volume dan mask memakai grid inferensi yang sama sehingga overlay mask terlihat. Mode <strong>DICOM + mask</strong> memuat file <code>.dcm</code> dengan urutan slice yang sama seperti pipeline (file <code>slice_order.json</code> di folder <code>dicom_series</code>, termasuk dalam ZIP). Overlay: <code>{{ result.mask_nii }}</code>, colormap hangat, <code>worldSpace</code>.</p>
+  <p><strong>CT + mask (NIfTI)</strong> memakai pasangan <code>{{ result.ct_view_nii }}</code> + <code>{{ result.mask_view_nii }}</code> (susunan H×W×Z, affine sejajar) agar Papaya menampilkan overlay dengan stabil. Mode <strong>DICOM + mask</strong> tidak diubah: tetap <code>.dcm</code> + <code>{{ result.mask_nii }}</code>.</p>
   <div class="papaya-toolbar" role="group" aria-label="Mode Papaya">
     <button type="button" class="papaya-mode active" id="papaya-btn-nifti" data-mode="nifti">CT + mask (NIfTI, disarankan)</button>
     <button type="button" class="papaya-mode" id="papaya-btn-dicom" data-mode="dicom">DICOM + mask</button>
@@ -59,6 +59,8 @@
     var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
     var maskUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}";
     var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
+    var ctViewUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii) }}";
+    var maskViewUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}";
 
     function absUrl(u) {
       try {
@@ -71,6 +73,8 @@
       manifestUrl: absUrl(manifestUrl),
       maskUrl: absUrl(maskUrl),
       ctUrl: absUrl(ctUrl),
+      ctViewUrl: absUrl(ctViewUrl),
+      maskViewUrl: absUrl(maskViewUrl),
     });
 
     // LUT hangat (bukan grayscale); min/max untuk mask biner 0/1.
@@ -113,10 +117,21 @@
     }
 
     function paramsNiftiPair() {
-      var params = baseParams();
-      params["images"] = [ctUrl, maskUrl];
-      params[ctUrl] = { min: 0, max: 255 };
-      params[maskUrl] = maskDisplay;
+      var params = [];
+      // Pasangan HWZ + affine diagonal: lebih cocok dengan pembaca NIfTI Papaya daripada (Z,H,W) + affine DICOM penuh.
+      params["worldSpace"] = false;
+      params["showOrientation"] = true;
+      params["showRuler"] = true;
+      params["smoothDisplay"] = false;
+      params["interpolation"] = "none";
+      params["images"] = [ctViewUrl, maskViewUrl];
+      params[ctViewUrl] = { min: 0, max: 255 };
+      params[maskViewUrl] = {
+        min: 0.5,
+        max: 255,
+        alpha: 0.72,
+        lut: "Fire",
+      };
       return params;
     }
 

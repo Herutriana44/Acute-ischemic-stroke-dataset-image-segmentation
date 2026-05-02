@@ -24,10 +24,8 @@
 
 <section class="card">
   <h2>Visualisasi (Orthogonal Viewer)</h2>
-  <p>Papaya menampilkan CT hasil windowing (<code>{{ result.ct_nii }}</code>) dan overlay mask (<code>{{ result.mask_nii }}</code>) dengan affine yang sama seperti inferensi — registrasi dengan sumbu DICOM asli.</p>
-  <div class="papaya-wrap">
-    <div class="papaya" data-params="papayaParams"></div>
-  </div>
+  <p>Series <strong>DICOM</strong> asli (folder <code>dicom_series</code>) sebagai citra dasar; overlay <code>{{ result.mask_nii }}</code> memakai affine yang sama dengan inferensi agar sejajar di ruang pasien (<code>worldSpace</code>).</p>
+  <div class="papaya-wrap" id="papaya-host"></div>
 </section>
 
 <section class="card">
@@ -37,20 +35,40 @@
 <script id="mesh-data" type="application/json">{{ result|tojson }}</script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
-<script type="text/javascript">
-  var papayaParams = [];
-</script>
-
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
 <script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 <script type="text/javascript">
   (function () {
-    // Pasangan NIfTI dari inferensi: affine identik dengan metadata DICOM (bukan mask HWZ + origin (0,0,0)).
-    // worldSpace membuat Papaya mendaftarkan overlay di koordinat dunia yang sama dengan CT.
-    var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
+    var host = document.getElementById("papaya-host");
+    var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
     var maskUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}";
+    var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
 
-    function buildParams() {
+    function mountAndStart(params) {
+      window.papayaParams = params;
+      if (!host) return;
+      host.innerHTML = '<div class="papaya" data-params="papayaParams"></div>';
+      function kick() {
+        if (window.papaya && window.papaya.Container && typeof window.papaya.Container.startPapaya === "function") {
+          window.papaya.Container.startPapaya();
+        }
+      }
+      setTimeout(kick, 0);
+    }
+
+    function paramsDicomPlusMask(dicomUrls) {
+      var params = [];
+      params["worldSpace"] = true;
+      params["showOrientation"] = true;
+      params["showRuler"] = true;
+      params["smoothDisplay"] = false;
+      params["interpolation"] = "none";
+      params["images"] = [dicomUrls, maskUrl];
+      params[maskUrl] = { min: 0, max: 1, alpha: 0.55, lut: "Spectrum" };
+      return params;
+    }
+
+    function paramsNiftiPair() {
       var params = [];
       params["worldSpace"] = true;
       params["showOrientation"] = true;
@@ -63,22 +81,28 @@
       return params;
     }
 
-    function startPapaya() {
-      var params = buildParams();
-      window.papayaParams = params;
-      if (window.papaya && window.papaya.Container) {
-        if (typeof window.papaya.Container.resetViewer === "function") {
-          window.papaya.Container.resetViewer(0, params);
-        } else if (typeof window.papaya.Container.startPapaya === "function") {
-          window.papaya.Container.startPapaya();
-        }
-      }
+    function start() {
+      fetch(manifestUrl, { cache: "no-store" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var urls = (data && data.dicom_urls) ? data.dicom_urls : [];
+          if (!urls.length) {
+            console.warn("Papaya: manifest DICOM kosong, pakai pasangan NIfTI.");
+            mountAndStart(paramsNiftiPair());
+            return;
+          }
+          mountAndStart(paramsDicomPlusMask(urls));
+        })
+        .catch(function (e) {
+          console.error("Papaya: gagal manifest, fallback NIfTI.", e);
+          mountAndStart(paramsNiftiPair());
+        });
     }
 
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () { setTimeout(startPapaya, 0); });
+      document.addEventListener("DOMContentLoaded", start);
     } else {
-      setTimeout(startPapaya, 0);
+      start();
     }
   })();
 </script>

@@ -43,6 +43,8 @@
     var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
     var maskUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}";
     var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
+    // LUT Papaya: hindari Grayscale/Spectrum (ujung putih); pakai warna hangat agar kontras dengan CT.
+    var maskDisplay = { min: 0, max: 1, alpha: 0.52, lut: "Overlay (Positives)" };
 
     function mountAndStart(params) {
       window.papayaParams = params;
@@ -64,7 +66,7 @@
       params["smoothDisplay"] = false;
       params["interpolation"] = "none";
       params["images"] = [dicomUrls, maskUrl];
-      params[maskUrl] = { min: 0, max: 1, alpha: 0.55, lut: "Spectrum" };
+      params[maskUrl] = maskDisplay;
       return params;
     }
 
@@ -77,7 +79,7 @@
       params["interpolation"] = "none";
       params["images"] = [ctUrl, maskUrl];
       params[ctUrl] = { min: 0, max: 255 };
-      params[maskUrl] = { min: 0, max: 1, alpha: 0.55, lut: "Spectrum" };
+      params[maskUrl] = maskDisplay;
       return params;
     }
 

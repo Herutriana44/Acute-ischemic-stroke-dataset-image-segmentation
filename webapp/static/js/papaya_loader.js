@@ -78,7 +78,7 @@
 
     // CT ditampilkan sebagai uint8 0..255 (hasil windowing), jadi pasti terlihat.
     window.papayaParams[ctBlobUrl] = { min: 0, max: 255 };
-    window.papayaParams[maskBlobUrl] = { min: 0, max: 1, alpha: 0.45, lut: "Spectrum" };
+    window.papayaParams[maskBlobUrl] = { min: 0, max: 1, alpha: 0.52, lut: "Overlay (Positives)" };
 
     host.innerHTML = `<div class="papaya" data-params="papayaParams"></div>`;
 

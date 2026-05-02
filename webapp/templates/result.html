@@ -45,12 +45,19 @@
 </section>
 
 <section class="card">
+  <h2>Visualisasi 3D — render permukaan (DICOM + mask)</h2>
+  <p>Model permukaan dari volume CT (metadata DICOM / HU) dan isosurface mask lesi. Anatomi: abu terang; lesi: oranye pekat (bukan putih/hitam). Sama dengan data mesh inferensi, tampilan dioptimalkan agar menyerupai render 3D klinis.</p>
+  <div id="viewer3d-surface" class="viewer viewer-surface"></div>
+</section>
+
+<section class="card">
   <a href="{{ url_for('index') }}" class="button-link">Upload Data Lain</a>
 </section>
 
 <script id="mesh-data" type="application/json">{{ result|tojson }}</script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/viewer3d_surface.js') }}"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
 <script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 <script type="text/javascript">

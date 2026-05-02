@@ -53,11 +53,12 @@ class InferenceResult:
     lesion_mesh: dict | None
 
 
-def _downsample_volume(volume: np.ndarray, max_dim: int = 128) -> np.ndarray:
+def _downsample_volume(volume: np.ndarray, max_dim: int = 128) -> tuple[np.ndarray, int]:
+    """Turunkan resolusi isotropik; kembalikan juga stride agar spacing fisik marching_cubes benar."""
     if max(volume.shape) <= max_dim:
-        return volume
+        return volume, 1
     stride = max(1, int(math.ceil(max(volume.shape) / max_dim)))
-    return volume[::stride, ::stride, ::stride]
+    return volume[::stride, ::stride, ::stride], stride
 
 
 def _mesh_to_json(volume: np.ndarray, spacing: tuple[float, float, float], level: float) -> dict | None:
@@ -135,10 +136,16 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     lesion_mm3 = float(lesion_vox * voxel_mm3)
     lesion_ml = lesion_mm3 / 1000.0
 
-    hu_volume_for_mesh = _downsample_volume(hu_vol, max_dim=100)
+    # Mesh CT dan lesi harus memakai grid + spacing fisik yang sama. Sebelumnya CT
+    # di-downsample tanpa menaikkan spacing → kontur CT "mengecil" ke dekat origin
+    # sementara lesi memakai voxel penuh → tampak jauh dan tidak proporsional.
+    mesh_max_dim = 100
+    hu_volume_for_mesh, stride = _downsample_volume(hu_vol, max_dim=mesh_max_dim)
+    mask_for_mesh = masks.astype(np.float32)[::stride, ::stride, ::stride]
+    mesh_spacing = (stride * ps_row, stride * ps_col, stride * ps_z)
     hu_level = float(np.percentile(hu_volume_for_mesh, 60))
-    hu_mesh = _mesh_to_json(hu_volume_for_mesh, spacing, level=hu_level)
-    lesion_mesh = _mesh_to_json(masks, spacing, level=0.5) if lesion_vox > 0 else None
+    hu_mesh = _mesh_to_json(hu_volume_for_mesh, mesh_spacing, level=hu_level)
+    lesion_mesh = _mesh_to_json(mask_for_mesh, mesh_spacing, level=0.5) if lesion_vox > 0 else None
 
     np.save(out_dir / "hu_volume.npy", hu_vol)
     np.save(out_dir / "mask_pred.npy", masks)

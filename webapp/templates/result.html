@@ -24,7 +24,7 @@
 
 <section class="card">
   <h2>Visualisasi (Orthogonal Viewer)</h2>
-  <p>Ditampilkan dengan Papaya (orthogonal viewer) dari series DICOM CT yang sudah disalin ke folder run + overlay mask prediksi.</p>
+  <p>Papaya menampilkan CT hasil windowing (<code>{{ result.ct_nii }}</code>) dan overlay mask (<code>{{ result.mask_nii }}</code>) dengan affine yang sama seperti inferensi — registrasi dengan sumbu DICOM asli.</p>
   <div class="papaya-wrap">
     <div class="papaya" data-params="papayaParams"></div>
   </div>
@@ -38,7 +38,6 @@
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
 <script type="text/javascript">
-  // Papaya config will be set after fetching the DICOM manifest (list of URLs).
   var papayaParams = [];
 </script>
 
@@ -46,45 +45,41 @@
 <script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 <script type="text/javascript">
   (function () {
-    // Use relative URLs to avoid mixed-content issues behind ngrok/HTTPS proxies.
-    var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
-    var overlayUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}";
+    // Pasangan NIfTI dari inferensi: affine identik dengan metadata DICOM (bukan mask HWZ + origin (0,0,0)).
+    // worldSpace membuat Papaya mendaftarkan overlay di koordinat dunia yang sama dengan CT.
+    var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
+    var maskUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}";
 
-    function bootPapaya(dicomUrls) {
+    function buildParams() {
       var params = [];
-      params["worldSpace"] = false;
+      params["worldSpace"] = true;
       params["showOrientation"] = true;
       params["showRuler"] = true;
       params["smoothDisplay"] = false;
       params["interpolation"] = "none";
+      params["images"] = [ctUrl, maskUrl];
+      params[ctUrl] = { min: 0, max: 255 };
+      params[maskUrl] = { min: 0, max: 1, alpha: 0.55, lut: "Spectrum" };
+      return params;
+    }
 
-      // DICOM series must be grouped as an array (Papaya config).
-      // Base = DICOM series, Overlay = mask NIfTI.
-      params["images"] = [dicomUrls, overlayUrl];
-      params[overlayUrl] = { min: 0, max: 1, alpha: 0.45, lut: "Spectrum" };
-
-      // If a viewer already exists (navigating back/forward), reset it.
-      if (window.papaya && window.papaya.Container && typeof window.papaya.Container.resetViewer === "function") {
-        window.papaya.Container.resetViewer(0, params);
-      } else {
-        // First load: expose as global for the papaya div.
-        window.papayaParams = params;
+    function startPapaya() {
+      var params = buildParams();
+      window.papayaParams = params;
+      if (window.papaya && window.papaya.Container) {
+        if (typeof window.papaya.Container.resetViewer === "function") {
+          window.papaya.Container.resetViewer(0, params);
+        } else if (typeof window.papaya.Container.startPapaya === "function") {
+          window.papaya.Container.startPapaya();
+        }
       }
     }
 
-    fetch(manifestUrl, { cache: "no-store" })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var urls = (data && data.dicom_urls) ? data.dicom_urls : [];
-        if (!urls.length) {
-          console.error("Manifest DICOM kosong:", data);
-          return;
-        }
-        bootPapaya(urls);
-      })
-      .catch(function (e) {
-        console.error("Gagal memuat manifest DICOM:", e);
-      });
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () { setTimeout(startPapaya, 0); });
+    } else {
+      setTimeout(startPapaya, 0);
+    }
   })();
 </script>
 {% endblock %}

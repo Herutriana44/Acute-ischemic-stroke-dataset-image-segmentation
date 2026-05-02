@@ -45,6 +45,14 @@ def create_app() -> Flask:
             send_kw["mimetype"] = "application/octet-stream"
         elif lower.endswith(".json"):
             send_kw["mimetype"] = "application/json"
+        elif lower.endswith(".ply"):
+            send_kw["mimetype"] = "application/vnd.ply"
+        elif lower.endswith(".zip"):
+            send_kw["mimetype"] = "application/zip"
+        elif lower.endswith(".obj"):
+            send_kw["mimetype"] = "model/obj"
+        elif lower.endswith(".mtl"):
+            send_kw["mimetype"] = "model/mtl"
 
         resp = send_from_directory(run_dir, filename, **send_kw)
         # Make remote-viewer loads (ngrok) more reliable.

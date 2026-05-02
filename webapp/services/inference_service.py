@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import shutil
+import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -43,6 +44,8 @@ class InferenceResult:
     overlay_slices_dir: str
     dicom_series_dir: str
     dicom_series_zip: str
+    mesh_ply_colored: str
+    mesh_3d_colored_zip: str
     lesion_voxels: int
     lesion_volume_mm3: float
     lesion_volume_ml: float
@@ -61,26 +64,115 @@ def _downsample_volume(volume: np.ndarray, max_dim: int = 128) -> tuple[np.ndarr
     return volume[::stride, ::stride, ::stride], stride
 
 
-def _mesh_to_json(volume: np.ndarray, spacing: tuple[float, float, float], level: float) -> dict | None:
+def _marching_surface(
+    volume: np.ndarray,
+    mesh_spacing: tuple[float, float, float],
+    level: float,
+) -> tuple[np.ndarray, np.ndarray] | None:
     if np.nanmax(volume) <= level:
         return None
-
     verts, faces, _, _ = marching_cubes(
         volume.astype(np.float32),
         level=level,
-        spacing=(spacing[2], spacing[0], spacing[1]),
+        spacing=(mesh_spacing[2], mesh_spacing[0], mesh_spacing[1]),
     )
     if len(verts) == 0 or len(faces) == 0:
         return None
+    # Sama dengan sumbu Plotly mesh3d: x←axis2, y←axis1, z←axis0
+    xyz = np.column_stack([verts[:, 2], verts[:, 1], verts[:, 0]]).astype(np.float64)
+    return xyz, faces.astype(np.int64)
 
+
+def _mesh_to_json_from_surface(xyz: np.ndarray, faces: np.ndarray) -> dict:
     return {
-        "x": verts[:, 2].round(4).tolist(),
-        "y": verts[:, 1].round(4).tolist(),
-        "z": verts[:, 0].round(4).tolist(),
+        "x": xyz[:, 0].round(4).tolist(),
+        "y": xyz[:, 1].round(4).tolist(),
+        "z": xyz[:, 2].round(4).tolist(),
         "i": faces[:, 0].tolist(),
         "j": faces[:, 1].tolist(),
         "k": faces[:, 2].tolist(),
     }
+
+
+def _write_colored_combined_ply(
+    path: Path,
+    parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int]]],
+) -> None:
+    """Gabung beberapa mesh ke satu PLY ASCII dengan warna per vertex (RGB 0–255)."""
+    if not parts:
+        return
+    all_v: list[np.ndarray] = []
+    all_f: list[np.ndarray] = []
+    all_rgb: list[np.ndarray] = []
+    offset = 0
+    for xyz, faces, rgb in parts:
+        n = len(xyz)
+        if n == 0:
+            continue
+        all_v.append(xyz)
+        all_f.append(faces + offset)
+        r, g, b = rgb
+        all_rgb.append(np.array([[r, g, b]] * n, dtype=np.uint8))
+        offset += n
+    if not all_v:
+        return
+    verts = np.vstack(all_v)
+    faces = np.vstack(all_f)
+    colors = np.vstack(all_rgb)
+    path = Path(path)
+    with path.open("w", encoding="utf-8") as f:
+        f.write("ply\nformat ascii 1.0\n")
+        f.write(f"element vertex {len(verts)}\n")
+        f.write("property float x\nproperty float y\nproperty float z\n")
+        f.write("property uchar red\nproperty uchar green\nproperty uchar blue\n")
+        f.write(f"element face {len(faces)}\n")
+        f.write("property list uchar int vertex_indices\n")
+        f.write("end_header\n")
+        for i in range(len(verts)):
+            x, y, z = verts[i]
+            r, g, b = colors[i]
+            f.write(f"{x:.6f} {y:.6f} {z:.6f} {int(r)} {int(g)} {int(b)}\n")
+        for tri in faces:
+            f.write(f"3 {int(tri[0])} {int(tri[1])} {int(tri[2])}\n")
+
+
+def _write_colored_obj_zip(
+    out_dir: Path,
+    parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int], str]],
+) -> str | None:
+    """ZIP berisi OBJ+MTL: satu objek per mesh dengan warna diffuse (nama objek = label)."""
+    if not parts:
+        return None
+
+    mtl_lines = []
+    obj_lines: list[str] = []
+    v_base = 1
+    for idx, (xyz, faces, rgb, name) in enumerate(parts):
+        if len(xyz) == 0:
+            continue
+        mat = f"mat_{idx}_{name}"
+        r, g, b = rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0
+        mtl_lines.append(
+            f"newmtl {mat}\nKd {r:.6f} {g:.6f} {b:.6f}\nKa 0.2 0.2 0.2\nKs 0.3 0.3 0.3\nd 1.0\n"
+        )
+        obj_lines.append(f"o {name}\nusemtl {mat}\n")
+        for row in xyz:
+            obj_lines.append(f"v {row[0]:.6f} {row[1]:.6f} {row[2]:.6f}\n")
+        for tri in faces:
+            a, b_, c = int(tri[0]) + v_base, int(tri[1]) + v_base, int(tri[2]) + v_base
+            obj_lines.append(f"f {a} {b_} {c}\n")
+        v_base += len(xyz)
+
+    if not obj_lines:
+        return None
+
+    mtl_name = "mesh_surfaces.mtl"
+    obj_name = "mesh_ct_lesion.obj"
+    zip_path = out_dir / "mesh_3d_colored.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(mtl_name, "".join(mtl_lines))
+        zf.writestr(obj_name, f"mtllib {mtl_name}\n" + "".join(obj_lines))
+    return zip_path.name
 
 
 def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path) -> dict:
@@ -150,8 +242,33 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     mask_for_mesh = masks.astype(np.float32)[::stride, ::stride, ::stride]
     mesh_spacing = (stride * ps_row, stride * ps_col, stride * ps_z)
     hu_level = float(np.percentile(hu_volume_for_mesh, 60))
-    hu_mesh = _mesh_to_json(hu_volume_for_mesh, mesh_spacing, level=hu_level)
-    lesion_mesh = _mesh_to_json(mask_for_mesh, mesh_spacing, level=0.5) if lesion_vox > 0 else None
+    hu_surf = _marching_surface(hu_volume_for_mesh, mesh_spacing, hu_level)
+    lesion_surf = (
+        _marching_surface(mask_for_mesh, mesh_spacing, 0.5) if lesion_vox > 0 else None
+    )
+    hu_mesh = _mesh_to_json_from_surface(*hu_surf) if hu_surf else None
+    lesion_mesh = _mesh_to_json_from_surface(*lesion_surf) if lesion_surf else None
+
+    # Warna selaras viewer 3D: CT abu-biru terang, lesi oranye (RGB 0–255).
+    ct_rgb = (188, 200, 218)
+    lesion_rgb = (234, 88, 12)
+    mesh_ply_name = "mesh_ct_lesion_colored.ply"
+    ply_parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int]]] = []
+    obj_parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int], str]] = []
+    if hu_surf:
+        ply_parts.append((*hu_surf, ct_rgb))
+        obj_parts.append((*hu_surf, ct_rgb, "ct_surface"))
+    if lesion_surf:
+        ply_parts.append((*lesion_surf, lesion_rgb))
+        obj_parts.append((*lesion_surf, lesion_rgb, "lesion_mask"))
+    mesh_3d_zip = ""
+    if ply_parts:
+        _write_colored_combined_ply(out_dir / mesh_ply_name, ply_parts)
+        zname = _write_colored_obj_zip(out_dir, obj_parts)
+        if zname:
+            mesh_3d_zip = zname
+    else:
+        mesh_ply_name = ""
 
     np.save(out_dir / "hu_volume.npy", hu_vol)
     np.save(out_dir / "mask_pred.npy", masks)
@@ -213,6 +330,8 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
         overlay_slices_dir=overlay_dir.name,
         dicom_series_dir=dicom_series_dir.name,
         dicom_series_zip=dicom_zip_path.name,
+        mesh_ply_colored=mesh_ply_name,
+        mesh_3d_colored_zip=mesh_3d_zip,
         lesion_voxels=lesion_vox,
         lesion_volume_mm3=round(lesion_mm3, 2),
         lesion_volume_ml=round(lesion_ml, 4),

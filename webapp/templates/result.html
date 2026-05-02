@@ -126,11 +126,12 @@
       params["interpolation"] = "none";
       params["images"] = [ctViewUrl, maskViewUrl];
       params[ctViewUrl] = { min: 0, max: 255 };
+      // Hindari LUT seperti Fire/Spectrum (ujung putih). "Overlay (Positives)" = merah → kuning.
       params[maskViewUrl] = {
         min: 0.5,
         max: 255,
-        alpha: 0.72,
-        lut: "Fire",
+        alpha: 0.68,
+        lut: "Overlay (Positives)",
       };
       return params;
     }

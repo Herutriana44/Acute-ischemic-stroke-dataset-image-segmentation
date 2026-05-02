@@ -9,6 +9,8 @@ from werkzeug.utils import secure_filename
 
 from webapp.services.inference_service import InferenceError
 
+REQUIRED_DICOM_MODALITY = "CT"
+
 SUPPORTED_SUFFIXES = {
     ".zip",
     ".rar",
@@ -73,7 +75,33 @@ def extract_archive(file: FileStorage, upload_root: Path) -> tuple[Path, str]:
     return extracted_dir, run_id
 
 
+def _peek_dicom_modality(series_dir: Path) -> str | None:
+    """Baca tag Modality dari salah satu file .dcm (tanpa memuat pixel data)."""
+    import pydicom
+
+    files = sorted([p for p in series_dir.glob("*.dcm") if p.is_file()])
+    for fp in files[:5]:
+        try:
+            ds = pydicom.dcmread(str(fp), stop_before_pixels=True, force=True)
+            m = getattr(ds, "Modality", None)
+            if m:
+                return str(m).strip().upper()
+        except Exception:
+            continue
+    return None
+
+
+def _path_has_folder_name(path: Path, name: str) -> bool:
+    token = name.upper()
+    return any(part.upper() == token for part in path.parts)
+
+
 def find_dicom_series_dir(extracted_dir: Path) -> Path:
+    """Pilih folder series DICOM CT.
+
+    Dari semua folder yang berisi .dcm, hanya kandidat dengan Modality CT
+    (atau path berisi subfolder `CT`) yang dipertimbangkan; lalu dipilih yang
+    paling banyak slice-nya."""
     candidate_dirs: dict[Path, int] = {}
     for dicom_path in extracted_dir.rglob("*.dcm"):
         parent = dicom_path.parent
@@ -82,5 +110,24 @@ def find_dicom_series_dir(extracted_dir: Path) -> Path:
     if not candidate_dirs:
         raise InferenceError("Tidak ditemukan file .dcm pada archive.")
 
-    best_dir = max(candidate_dirs.items(), key=lambda item: item[1])[0]
-    return best_dir
+    ct_from_tag: list[tuple[Path, int]] = []
+    for d, n in candidate_dirs.items():
+        if _peek_dicom_modality(d) == REQUIRED_DICOM_MODALITY:
+            ct_from_tag.append((d, n))
+
+    if ct_from_tag:
+        return max(ct_from_tag, key=lambda item: item[1])[0]
+
+    # Ekspor kadang tidak mengisi Modality; andai subfolder `CT` seperti contoh dataset.
+    ct_from_path: list[tuple[Path, int]] = []
+    for d, n in candidate_dirs.items():
+        if _path_has_folder_name(d, REQUIRED_DICOM_MODALITY):
+            ct_from_path.append((d, n))
+
+    if ct_from_path:
+        return max(ct_from_path, key=lambda item: item[1])[0]
+
+    raise InferenceError(
+        "Tidak ditemukan series DICOM CT. Pastikan arsip berisi pemindaian CT "
+        "(tag Modality CT), atau struktur folder dengan subfolder 'CT' berisi file .dcm."
+    )

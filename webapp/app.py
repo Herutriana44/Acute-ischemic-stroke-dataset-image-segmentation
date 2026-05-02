@@ -82,7 +82,7 @@ def create_app() -> Flask:
     def predict():
         archive_file = request.files.get("dicom_archive")
         if archive_file is None or archive_file.filename == "":
-            flash("Pilih file archive DICOM terlebih dahulu.")
+            flash("Pilih file arsip DICOM CT terlebih dahulu.")
             return redirect(url_for("index"))
 
         try:

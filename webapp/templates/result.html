@@ -17,6 +17,18 @@
 </section>
 
 <section class="card">
+  <h2>Unduh hasil segmentasi</h2>
+  <p class="muted-note">File tersedia di folder run ini; klik untuk mengunduh.</p>
+  <ul class="download-list">
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}" download="{{ result.mask_nii }}">Mask prediksi — {{ result.mask_nii }}</a></li>
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}" download="{{ result.ct_nii }}">CT ter-window (uint8) — {{ result.ct_nii }}</a></li>
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_hu_nii) }}" download="{{ result.ct_hu_nii }}">CT HU — {{ result.ct_hu_nii }}</a></li>
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.dicom_series_zip) }}" download="{{ result.dicom_series_zip }}">Arsip DICOM series — {{ result.dicom_series_zip }}</a></li>
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename='result.json') }}" download="result.json">Ringkasan metrik JSON — result.json</a></li>
+  </ul>
+</section>
+
+<section class="card">
   <h2>Visualisasi 3D (DICOM + Mask)</h2>
   <p>Objek abu-abu: kontur volume CT. Objek merah: area prediksi lesi.</p>
   <div id="viewer3d" class="viewer"></div>
@@ -24,7 +36,11 @@
 
 <section class="card">
   <h2>Visualisasi (Orthogonal Viewer)</h2>
-  <p>Series <strong>DICOM</strong> asli (folder <code>dicom_series</code>) sebagai citra dasar; overlay <code>{{ result.mask_nii }}</code> memakai affine yang sama dengan inferensi agar sejajar di ruang pasien (<code>worldSpace</code>).</p>
+  <p><strong>CT + mask (NIfTI)</strong> dipakai secara bawaan: volume dan mask memakai grid inferensi yang sama sehingga overlay mask terlihat. Mode <strong>DICOM + mask</strong> memuat file <code>.dcm</code> dengan urutan slice yang sama seperti pipeline (file <code>slice_order.json</code> di folder <code>dicom_series</code>, termasuk dalam ZIP). Overlay: <code>{{ result.mask_nii }}</code>, colormap hangat, <code>worldSpace</code>.</p>
+  <div class="papaya-toolbar" role="group" aria-label="Mode Papaya">
+    <button type="button" class="papaya-mode active" id="papaya-btn-nifti" data-mode="nifti">CT + mask (NIfTI, disarankan)</button>
+    <button type="button" class="papaya-mode" id="papaya-btn-dicom" data-mode="dicom">DICOM + mask</button>
+  </div>
   <div class="papaya-wrap" id="papaya-host"></div>
 </section>
 
@@ -43,8 +59,29 @@
     var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
     var maskUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}";
     var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
-    // LUT Papaya: hindari Grayscale/Spectrum (ujung putih); pakai warna hangat agar kontras dengan CT.
-    var maskDisplay = { min: 0, max: 1, alpha: 0.52, lut: "Overlay (Positives)" };
+
+    function absUrl(u) {
+      try {
+        return new URL(u, window.location.href).href;
+      } catch (e) {
+        return u;
+      }
+    }
+    console.info("[Papaya / inference URLs]", {
+      manifestUrl: absUrl(manifestUrl),
+      maskUrl: absUrl(maskUrl),
+      ctUrl: absUrl(ctUrl),
+    });
+
+    // LUT hangat (bukan grayscale); min/max untuk mask biner 0/1.
+    var maskDisplay = {
+      min: 0,
+      max: 1,
+      alpha: 0.68,
+      lut: "Overlay (Positives)",
+    };
+
+    var dicomUrlsCache = [];
 
     function mountAndStart(params) {
       window.papayaParams = params;
@@ -58,46 +95,70 @@
       setTimeout(kick, 0);
     }
 
-    function paramsDicomPlusMask(dicomUrls) {
+    function baseParams() {
       var params = [];
       params["worldSpace"] = true;
       params["showOrientation"] = true;
       params["showRuler"] = true;
       params["smoothDisplay"] = false;
       params["interpolation"] = "none";
+      return params;
+    }
+
+    function paramsDicomPlusMask(dicomUrls) {
+      var params = baseParams();
       params["images"] = [dicomUrls, maskUrl];
       params[maskUrl] = maskDisplay;
       return params;
     }
 
     function paramsNiftiPair() {
-      var params = [];
-      params["worldSpace"] = true;
-      params["showOrientation"] = true;
-      params["showRuler"] = true;
-      params["smoothDisplay"] = false;
-      params["interpolation"] = "none";
+      var params = baseParams();
       params["images"] = [ctUrl, maskUrl];
       params[ctUrl] = { min: 0, max: 255 };
       params[maskUrl] = maskDisplay;
       return params;
     }
 
+    function setMode(mode) {
+      var niftiBtn = document.getElementById("papaya-btn-nifti");
+      var dicomBtn = document.getElementById("papaya-btn-dicom");
+      if (niftiBtn) niftiBtn.classList.toggle("active", mode === "nifti");
+      if (dicomBtn) dicomBtn.classList.toggle("active", mode === "dicom");
+
+      if (mode === "nifti") {
+        mountAndStart(paramsNiftiPair());
+        return;
+      }
+      if (!dicomUrlsCache.length) {
+        console.warn("Papaya: tidak ada URL DICOM; tetap pakai NIfTI.");
+        mountAndStart(paramsNiftiPair());
+        if (niftiBtn) niftiBtn.classList.add("active");
+        if (dicomBtn) dicomBtn.classList.remove("active");
+        return;
+      }
+      mountAndStart(paramsDicomPlusMask(dicomUrlsCache));
+    }
+
     function start() {
+      var niftiBtn = document.getElementById("papaya-btn-nifti");
+      var dicomBtn = document.getElementById("papaya-btn-dicom");
+      if (niftiBtn) niftiBtn.addEventListener("click", function () { setMode("nifti"); });
+      if (dicomBtn) dicomBtn.addEventListener("click", function () { setMode("dicom"); });
+
       fetch(manifestUrl, { cache: "no-store" })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          var urls = (data && data.dicom_urls) ? data.dicom_urls : [];
-          if (!urls.length) {
-            console.warn("Papaya: manifest DICOM kosong, pakai pasangan NIfTI.");
-            mountAndStart(paramsNiftiPair());
-            return;
+          dicomUrlsCache = (data && data.dicom_urls) ? data.dicom_urls : [];
+          if (!dicomUrlsCache.length) {
+            console.warn("Papaya: manifest DICOM kosong; hanya mode NIfTI.");
           }
-          mountAndStart(paramsDicomPlusMask(urls));
+          setMode("nifti");
         })
         .catch(function (e) {
-          console.error("Papaya: gagal manifest, fallback NIfTI.", e);
-          mountAndStart(paramsNiftiPair());
+          console.error("Papaya: gagal memuat manifest.", e);
+          dicomUrlsCache = [];
+          setMode("nifti");
         });
     }
 

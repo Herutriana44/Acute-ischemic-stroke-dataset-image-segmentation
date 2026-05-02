@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -36,7 +37,16 @@ def create_app() -> Flask:
         run_dir = (runs_dir / run_id).resolve()
         if runs_dir.resolve() not in run_dir.parents:
             abort(404)
-        resp = send_from_directory(run_dir, filename, as_attachment=False, conditional=True, max_age=0)
+        send_kw: dict = dict(as_attachment=False, conditional=True, max_age=0)
+        lower = filename.lower()
+        if lower.endswith(".nii.gz"):
+            send_kw["mimetype"] = "application/gzip"
+        elif lower.endswith(".nii"):
+            send_kw["mimetype"] = "application/octet-stream"
+        elif lower.endswith(".json"):
+            send_kw["mimetype"] = "application/json"
+
+        resp = send_from_directory(run_dir, filename, **send_kw)
         # Make remote-viewer loads (ngrok) more reliable.
         resp = make_response(resp)
         resp.headers["Cache-Control"] = "no-store"
@@ -59,7 +69,22 @@ def create_app() -> Flask:
         if not dicom_dir.exists() or not dicom_dir.is_dir():
             abort(404)
 
-        files = sorted([p for p in dicom_dir.glob("*.dcm") if p.is_file()])
+        order_path = dicom_dir / "slice_order.json"
+        files: list[Path]
+        if order_path.is_file():
+            try:
+                spec = json.loads(order_path.read_text(encoding="utf-8"))
+                names = spec.get("ordered_filenames") or []
+                ordered = [dicom_dir / n for n in names if (dicom_dir / n).is_file()]
+                seen = {p.name for p in ordered}
+                extra = sorted(
+                    [p for p in dicom_dir.glob("*.dcm") if p.is_file() and p.name not in seen]
+                )
+                files = ordered + extra
+            except (json.JSONDecodeError, OSError):
+                files = sorted([p for p in dicom_dir.glob("*.dcm") if p.is_file()])
+        else:
+            files = sorted([p for p in dicom_dir.glob("*.dcm") if p.is_file()])
         # Fallback: if extensions are missing, include all files.
         if not files:
             files = sorted([p for p in dicom_dir.iterdir() if p.is_file()])

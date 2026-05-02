@@ -163,3 +163,52 @@ button,
 .error {
   border-color: var(--danger);
 }
+
+.muted-note {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.download-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  line-height: 1.8;
+}
+
+.download-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.download-link:hover {
+  color: #38bdf8;
+}
+
+.papaya-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+button.papaya-mode {
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #0f172a;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+button.papaya-mode:hover {
+  border-color: var(--muted);
+}
+
+button.papaya-mode.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(14, 165, 233, 0.12);
+}

@@ -109,6 +109,12 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     except Exception as exc:
         raise InferenceError(f"Gagal membaca DICOM series: {exc}") from exc
 
+    # Urutan slice untuk Papaya/manifest: harus sama dengan stacking volume + mask (bukan sort nama file).
+    (dicom_series_dir / "slice_order.json").write_text(
+        json.dumps({"ordered_filenames": [Path(s.path).name for s in slices]}),
+        encoding="utf-8",
+    )
+
     _, spacing = dicom_affine_from_slices(slices)
     ps_row, ps_col, ps_z = spacing
     hu_vol = np.stack([s.hu for s in slices], axis=0).astype(np.float32)

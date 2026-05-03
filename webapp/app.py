@@ -153,7 +153,11 @@ def create_app() -> Flask:
             hu = hu[::stride, ::stride, ::stride]
             mask = mask[::stride, ::stride, ::stride]
         eff = (ps_row * stride, ps_col * stride, ps_z * stride)
-        return hu.astype(np.float32), mask.astype(np.uint8), stride, eff
+        # Wajib C-contiguous: slice bertingkat sering non-contiguous; astype(dtype sama)
+        # tidak menyalin → memoryview(Response) bisa mengirim urutan voxel salah ke VTK.js.
+        hu = np.ascontiguousarray(hu, dtype=np.float32)
+        mask = np.ascontiguousarray(mask, dtype=np.uint8)
+        return hu, mask, stride, eff
 
     @app.route("/runs/<run_id>/vtk_meta", methods=["GET"])
     def vtk_meta(run_id: str):

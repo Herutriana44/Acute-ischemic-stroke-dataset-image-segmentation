@@ -22,8 +22,9 @@ function buildHuVolume(imageData, huArray, nx, ny, nz, spacing) {
     numberOfComponents: 1,
     values: huArray,
   });
-  imageData.setDimensions(nx, ny, nz);
+  imageData.setOrigin(0, 0, 0);
   imageData.setSpacing(spacing[0], spacing[1], spacing[2]);
+  imageData.setExtent(0, nx - 1, 0, ny - 1, 0, nz - 1);
   imageData.getPointData().setScalars(da);
 }
 
@@ -33,8 +34,9 @@ function buildMaskVolume(imageData, maskArray, nx, ny, nz, spacing) {
     numberOfComponents: 1,
     values: maskArray,
   });
-  imageData.setDimensions(nx, ny, nz);
+  imageData.setOrigin(0, 0, 0);
   imageData.setSpacing(spacing[0], spacing[1], spacing[2]);
+  imageData.setExtent(0, nx - 1, 0, ny - 1, 0, nz - 1);
   imageData.getPointData().setScalars(da);
 }
 
@@ -42,6 +44,10 @@ function ctVolumeActor(imageData) {
   const mapper = vtkVolumeMapper.newInstance();
   mapper.setInputData(imageData);
   mapper.setBlendModeToComposite();
+  const sp = imageData.getSpacing();
+  const minSp = Math.min(sp[0] || 1, sp[1] || 1, sp[2] || 1);
+  mapper.setSampleDistance(Math.max(minSp * 0.4, 0.15));
+  mapper.setAutoAdjustSampleDistances(true);
 
   const actor = vtkVolume.newInstance();
   actor.setMapper(mapper);
@@ -84,6 +90,10 @@ function maskVolumeActor(imageData) {
   const mapper = vtkVolumeMapper.newInstance();
   mapper.setInputData(imageData);
   mapper.setBlendModeToComposite();
+  const sp = imageData.getSpacing();
+  const minSp = Math.min(sp[0] || 1, sp[1] || 1, sp[2] || 1);
+  mapper.setSampleDistance(Math.max(minSp * 0.35, 0.12));
+  mapper.setAutoAdjustSampleDistances(true);
 
   const actor = vtkVolume.newInstance();
   actor.setMapper(mapper);
@@ -114,11 +124,15 @@ async function fetchBinary(url) {
 
 function mountViewer(container, genericRw) {
   genericRw.setContainer(container);
-  genericRw.resize();
   const rw = genericRw.getRenderWindow();
   const renderer = genericRw.getRenderer();
   renderer.setBackground(0.04, 0.05, 0.08);
-  rw.render();
+
+  const renderFrame = () => {
+    genericRw.resize();
+    rw.render();
+  };
+  requestAnimationFrame(() => requestAnimationFrame(renderFrame));
 
   const ro = new ResizeObserver(() => {
     genericRw.resize();
@@ -176,6 +190,8 @@ async function startVtkDicomViewer(opts) {
     renderer.addVolume(ctActor);
     renderer.addVolume(mkActor);
     renderer.resetCamera();
+    renderer.resetCameraClippingRange();
+    genericRw.resize();
     genericRw.getRenderWindow().render();
 
     const hint = el(
@@ -199,19 +215,31 @@ async function startVtkDicomViewer(opts) {
 const payload = document.getElementById("mesh-data");
 const vtkContainer = document.getElementById("viewer3d-vtk");
 if (payload && vtkContainer) {
-  const result = JSON.parse(payload.textContent);
-  const runId = result.run_id;
-  const q = `max=${VTK_MAX}`;
-  const base = new URL(window.location.href);
-  const metaUrl = new URL(`/runs/${encodeURIComponent(runId)}/vtk_meta?${q}`, base).href;
-  const huUrl = new URL(`/runs/${encodeURIComponent(runId)}/vtk_hu.bin?${q}`, base).href;
-  const maskUrl = new URL(`/runs/${encodeURIComponent(runId)}/vtk_mask.bin?${q}`, base).href;
+  try {
+    const result = JSON.parse(payload.textContent || "{}");
+    const runId = result && result.run_id;
+    if (!runId) throw new Error("run_id tidak ditemukan di halaman hasil.");
+    const q = `max=${VTK_MAX}`;
+    const base = new URL(window.location.href);
+    const metaUrl = new URL(`/runs/${encodeURIComponent(runId)}/vtk_meta?${q}`, base).href;
+    const huUrl = new URL(`/runs/${encodeURIComponent(runId)}/vtk_hu.bin?${q}`, base).href;
+    const maskUrl = new URL(`/runs/${encodeURIComponent(runId)}/vtk_mask.bin?${q}`, base).href;
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      startVtkDicomViewer({ container: vtkContainer, metaUrl, huUrl, maskUrl });
-    });
-  } else {
-    startVtkDicomViewer({ container: vtkContainer, metaUrl, huUrl, maskUrl });
+    const go = () => startVtkDicomViewer({ container: vtkContainer, metaUrl, huUrl, maskUrl });
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", go);
+    } else {
+      go();
+    }
+  } catch (e) {
+    console.error("[VTK viewer] inisialisasi", e);
+    vtkContainer.innerHTML = "";
+    vtkContainer.appendChild(
+      el(
+        "p",
+        e && e.message ? `Visualisasi VTK tidak bisa dimulai: ${e.message}` : "Visualisasi VTK tidak bisa dimulai.",
+        "muted-note"
+      )
+    );
   }
 }

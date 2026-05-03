@@ -51,12 +51,12 @@
 </section>
 
 <section class="card">
-  <h2>Visualisasi 3D — render permukaan (DICOM + mask)</h2>
-  <p>Model permukaan dari volume CT (metadata DICOM / HU) dan isosurface mask lesi. Anatomi: abu terang; lesi: oranye pekat (bukan putih/hitam). Sama dengan data mesh inferensi, tampilan dioptimalkan agar menyerupai render 3D klinis.</p>
+  <h2>Visualisasi 3D — VTK.js (volume DICOM + masking)</h2>
+  <p>Volume rendering <strong>VTK.js</strong> dari grid HU yang sama dengan pipeline DICOM inferensi, ditumpuk dengan overlay mask lesi. Spasi voxel mengikuti metadata seri. Resolusi dibatasi (downsample) agar tetap responsif di browser.</p>
   {% if result.mesh_ply_colored or result.mesh_3d_colored_zip %}
-  <p class="muted-note">Unduh model 3D berwarna (CT + masking): {% if result.mesh_ply_colored %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download>PLY gabungan</a>{% endif %}{% if result.mesh_ply_colored and result.mesh_3d_colored_zip %} · {% endif %}{% if result.mesh_3d_colored_zip %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download>ZIP (OBJ+MTL)</a>{% endif %} — cocok untuk MeshLab, Blender, dll.</p>
+  <p class="muted-note">Unduh model permukaan (mesh marching cubes): {% if result.mesh_ply_colored %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download>PLY gabungan</a>{% endif %}{% if result.mesh_ply_colored and result.mesh_3d_colored_zip %} · {% endif %}{% if result.mesh_3d_colored_zip %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download>ZIP (OBJ+MTL)</a>{% endif %}.</p>
   {% endif %}
-  <div id="viewer3d-surface" class="viewer viewer-surface"></div>
+  <div id="viewer3d-vtk" class="viewer viewer-surface"></div>
 </section>
 
 <section class="card">
@@ -64,9 +64,16 @@
 </section>
 
 <script id="mesh-data" type="application/json">{{ result|tojson }}</script>
+<script type="importmap">
+{
+  "imports": {
+    "@kitware/vtk.js/": "https://cdn.jsdelivr.net/npm/@kitware/vtk.js@28.12.4/"
+  }
+}
+</script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
-<script src="{{ url_for('static', filename='js/viewer3d_surface.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/viewer3d_vtk.js') }}"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
 <script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 <script type="text/javascript">

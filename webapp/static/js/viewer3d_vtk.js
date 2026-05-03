@@ -188,13 +188,11 @@ async function startVtkDicomViewer(opts) {
   } catch (e) {
     console.error("[VTK viewer]", e);
     container.innerHTML = "";
-    container.appendChild(
-      el(
-        "p",
-        "Gagal memuat visualisasi VTK. Pastikan inferensi telah menghasilkan hu_volume.npy dan mask_pred.npy.",
-        "muted-note"
-      )
-    );
+    const msg =
+      e && e.message
+        ? `Gagal memuat visualisasi VTK: ${e.message}`
+        : "Gagal memuat visualisasi VTK. Pastikan inferensi telah menghasilkan hu_volume.npy dan mask_pred.npy.";
+    container.appendChild(el("p", msg, "muted-note"));
   }
 }
 

@@ -67,7 +67,10 @@
 <script type="importmap">
 {
   "imports": {
-    "@kitware/vtk.js/": "https://cdn.jsdelivr.net/npm/@kitware/vtk.js@28.12.4/"
+    "@kitware/vtk.js/": "https://cdn.jsdelivr.net/npm/@kitware/vtk.js@28.12.4/",
+    "gl-matrix": "https://cdn.jsdelivr.net/npm/gl-matrix@3.4.3/esm/index.js",
+    "fast-deep-equal": "https://cdn.jsdelivr.net/npm/fast-deep-equal@3.1.3/+esm",
+    "globalthis": "{{ url_for('static', filename='js/shims/globalthis-shim.js') }}"
   }
 }
 </script>

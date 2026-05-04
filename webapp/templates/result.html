@@ -51,12 +51,21 @@
 </section>
 
 <section class="card">
-  <h2>Visualisasi 3D — VTK.js (volume DICOM + masking)</h2>
-  <p>Volume rendering <strong>VTK.js</strong> dari grid HU yang sama dengan pipeline DICOM inferensi, ditumpuk dengan overlay mask lesi. Spasi voxel mengikuti metadata seri. Resolusi dibatasi (downsample) agar tetap responsif di browser.</p>
+  <h2>Visualisasi 3D — VTK.js (Volume Render vs Segmentation)</h2>
+  <p>Tampilan dipisah dua panel: <strong>Volume Render (CT)</strong> vs <strong>Segmentation (mask)</strong>. Spasi voxel mengikuti metadata seri. Resolusi dibatasi (downsample) agar tetap responsif di browser.</p>
   {% if result.mesh_ply_colored or result.mesh_3d_colored_zip %}
   <p class="muted-note">Unduh model permukaan (mesh marching cubes): {% if result.mesh_ply_colored %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download>PLY gabungan</a>{% endif %}{% if result.mesh_ply_colored and result.mesh_3d_colored_zip %} · {% endif %}{% if result.mesh_3d_colored_zip %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download>ZIP (OBJ+MTL)</a>{% endif %}.</p>
   {% endif %}
-  <div id="viewer3d-vtk" class="viewer viewer-surface"></div>
+  <div class="vtk-compare">
+    <div class="vtk-panel">
+      <div class="vtk-panel-title">VOLUME RENDER</div>
+      <div id="viewer3d-vtk-ct" class="viewer viewer-surface"></div>
+    </div>
+    <div class="vtk-panel">
+      <div class="vtk-panel-title">SEGMENTATION</div>
+      <div id="viewer3d-vtk-seg" class="viewer viewer-surface"></div>
+    </div>
+  </div>
 </section>
 
 <section class="card">

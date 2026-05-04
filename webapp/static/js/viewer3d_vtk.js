@@ -41,6 +41,10 @@ function buildMaskVolume(imageData, maskArray, nx, ny, nz, spacing) {
 }
 
 function ctVolumeActor(imageData) {
+  return ctVolumeActorWithOpacityScale(imageData, 1.0);
+}
+
+function ctVolumeActorWithOpacityScale(imageData, opacityScale) {
   const mapper = vtkVolumeMapper.newInstance();
   mapper.setInputData(imageData);
   mapper.setBlendModeToComposite();
@@ -71,9 +75,9 @@ function ctVolumeActor(imageData) {
 
   op.addPoint(lo, 0.0);
   op.addPoint(wmin, 0.0);
-  op.addPoint(c, 0.18);
-  op.addPoint(wmax, 0.55);
-  op.addPoint(hi, 0.72);
+  op.addPoint(c, 0.18 * opacityScale);
+  op.addPoint(wmax, 0.55 * opacityScale);
+  op.addPoint(hi, 0.72 * opacityScale);
 
   const prop = actor.getProperty();
   prop.setRGBTransferFunction(0, ct);
@@ -141,6 +145,62 @@ function mountViewer(container, genericRw) {
   ro.observe(container);
 }
 
+function prepareVtkContainer(container) {
+  container.innerHTML = "";
+  const wrap = el("div", "", "vtk-wrap");
+  wrap.style.width = "100%";
+  wrap.style.height = "100%";
+  // follow .viewer height (650px) while allowing panel to shrink if needed
+  wrap.style.minHeight = "650px";
+  container.appendChild(wrap);
+  return wrap;
+}
+
+async function loadVtkBuffers(metaUrl, huUrl, maskUrl) {
+  const metaR = await fetch(metaUrl, { cache: "no-store" });
+  if (!metaR.ok) throw new Error(`Meta HTTP ${metaR.status}`);
+  const meta = await metaR.json();
+  const [nx, ny, nz] = meta.dims_xyz;
+  const sp = meta.spacing_xyz_mm;
+
+  const [huBuf, maskBuf] = await Promise.all([fetchBinary(huUrl), fetchBinary(maskUrl)]);
+  const hu = new Float32Array(huBuf);
+  const mask = new Uint8Array(maskBuf);
+  const expected = nx * ny * nz;
+  if (hu.length !== expected || mask.length !== expected) {
+    throw new Error(`Ukuran buffer tidak cocok: ${hu.length}, ${mask.length} vs ${expected}`);
+  }
+
+  const huImage = vtkImageData.newInstance();
+  buildHuVolume(huImage, hu, nx, ny, nz, sp);
+
+  const maskImage = vtkImageData.newInstance();
+  buildMaskVolume(maskImage, mask, nx, ny, nz, sp);
+
+  return { meta, dims: [nx, ny, nz], spacing: sp, huImage, maskImage };
+}
+
+function createGenericRw(container) {
+  const genericRw = vtkGenericRenderWindow.newInstance({
+    background: [0.04, 0.05, 0.08],
+    listenWindowResize: true,
+  });
+  mountViewer(container, genericRw);
+  return genericRw;
+}
+
+function renderVolumes(container, volumes) {
+  const wrap = prepareVtkContainer(container);
+  const genericRw = createGenericRw(wrap);
+  const renderer = genericRw.getRenderer();
+  volumes.forEach((v) => renderer.addVolume(v));
+  renderer.resetCamera();
+  renderer.resetCameraClippingRange();
+  genericRw.resize();
+  genericRw.getRenderWindow().render();
+  return genericRw;
+}
+
 async function startVtkDicomViewer(opts) {
   const { container, metaUrl, huUrl, maskUrl } = opts;
   if (!container) return;
@@ -149,58 +209,10 @@ async function startVtkDicomViewer(opts) {
   const status = el("p", "Memuat volume DICOM + mask untuk VTK…", "vtk-status muted-note");
   container.appendChild(status);
 
-  let genericRw;
   try {
-    const metaR = await fetch(metaUrl, { cache: "no-store" });
-    if (!metaR.ok) throw new Error(`Meta HTTP ${metaR.status}`);
-    const meta = await metaR.json();
-    const [nx, ny, nz] = meta.dims_xyz;
-    const sp = meta.spacing_xyz_mm;
-
-    const [huBuf, maskBuf] = await Promise.all([fetchBinary(huUrl), fetchBinary(maskUrl)]);
-    const hu = new Float32Array(huBuf);
-    const mask = new Uint8Array(maskBuf);
-    const expected = nx * ny * nz;
-    if (hu.length !== expected || mask.length !== expected) {
-      throw new Error(`Ukuran buffer tidak cocok: ${hu.length}, ${mask.length} vs ${expected}`);
-    }
-
+    const { huImage, maskImage } = await loadVtkBuffers(metaUrl, huUrl, maskUrl);
     container.innerHTML = "";
-    const wrap = el("div", "", "vtk-wrap");
-    wrap.style.width = "100%";
-    wrap.style.height = "100%";
-    wrap.style.minHeight = "650px";
-    container.appendChild(wrap);
-
-    const huImage = vtkImageData.newInstance();
-    buildHuVolume(huImage, hu, nx, ny, nz, sp);
-
-    const maskImage = vtkImageData.newInstance();
-    buildMaskVolume(maskImage, mask, nx, ny, nz, sp);
-
-    genericRw = vtkGenericRenderWindow.newInstance({
-      background: [0.04, 0.05, 0.08],
-      listenWindowResize: true,
-    });
-    mountViewer(wrap, genericRw);
-
-    const renderer = genericRw.getRenderer();
-    const ctActor = ctVolumeActor(huImage);
-    const mkActor = maskVolumeActor(maskImage);
-    renderer.addVolume(ctActor);
-    renderer.addVolume(mkActor);
-    renderer.resetCamera();
-    renderer.resetCameraClippingRange();
-    genericRw.resize();
-    genericRw.getRenderWindow().render();
-
-    const hint = el(
-      "p",
-      "VTK.js: volume rendering HU (grid DICOM) + overlay mask lesi. Putar dengan drag; scroll untuk zoom.",
-      "muted-note"
-    );
-    hint.style.marginTop = "8px";
-    container.appendChild(hint);
+    renderVolumes(container, [ctVolumeActor(huImage), maskVolumeActor(maskImage)]);
   } catch (e) {
     console.error("[VTK viewer]", e);
     container.innerHTML = "";
@@ -213,8 +225,10 @@ async function startVtkDicomViewer(opts) {
 }
 
 const payload = document.getElementById("mesh-data");
-const vtkContainer = document.getElementById("viewer3d-vtk");
-if (payload && vtkContainer) {
+const vtkContainerLegacy = document.getElementById("viewer3d-vtk");
+const vtkCt = document.getElementById("viewer3d-vtk-ct");
+const vtkSeg = document.getElementById("viewer3d-vtk-seg");
+if (payload && (vtkContainerLegacy || (vtkCt && vtkSeg))) {
   try {
     const result = JSON.parse(payload.textContent || "{}");
     const runId = result && result.run_id;
@@ -225,7 +239,41 @@ if (payload && vtkContainer) {
     const huUrl = new URL(`/runs/${encodeURIComponent(runId)}/vtk_hu.bin?${q}`, base).href;
     const maskUrl = new URL(`/runs/${encodeURIComponent(runId)}/vtk_mask.bin?${q}`, base).href;
 
-    const go = () => startVtkDicomViewer({ container: vtkContainer, metaUrl, huUrl, maskUrl });
+    const go = async () => {
+      if (vtkCt && vtkSeg) {
+        vtkCt.innerHTML = "";
+        vtkSeg.innerHTML = "";
+        const note = el("p", "Memuat data VTK (HU + mask)…", "muted-note");
+        note.style.margin = "0 0 10px";
+        // show message once above CT panel (small UX)
+        vtkCt.appendChild(note);
+        try {
+          const { huImage, maskImage } = await loadVtkBuffers(metaUrl, huUrl, maskUrl);
+          vtkCt.innerHTML = "";
+          vtkSeg.innerHTML = "";
+
+          // Left: CT volume render (no mask)
+          renderVolumes(vtkCt, [ctVolumeActor(huImage)]);
+
+          // Right: segmentation with faint CT context + stronger mask
+          renderVolumes(vtkSeg, [ctVolumeActorWithOpacityScale(huImage, 0.25), maskVolumeActor(maskImage)]);
+          return;
+        } catch (e) {
+          console.error("[VTK compare viewer]", e);
+          const msg = e && e.message ? `Gagal memuat VTK compare: ${e.message}` : "Gagal memuat VTK compare.";
+          vtkCt.innerHTML = "";
+          vtkSeg.innerHTML = "";
+          vtkCt.appendChild(el("p", msg, "muted-note"));
+          vtkSeg.appendChild(el("p", msg, "muted-note"));
+          return;
+        }
+      }
+
+      // fallback: legacy single viewer
+      if (vtkContainerLegacy) {
+        startVtkDicomViewer({ container: vtkContainerLegacy, metaUrl, huUrl, maskUrl });
+      }
+    };
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", go);
     } else {
@@ -233,13 +281,15 @@ if (payload && vtkContainer) {
     }
   } catch (e) {
     console.error("[VTK viewer] inisialisasi", e);
-    vtkContainer.innerHTML = "";
-    vtkContainer.appendChild(
-      el(
-        "p",
-        e && e.message ? `Visualisasi VTK tidak bisa dimulai: ${e.message}` : "Visualisasi VTK tidak bisa dimulai.",
-        "muted-note"
-      )
-    );
+    const msg = e && e.message ? `Visualisasi VTK tidak bisa dimulai: ${e.message}` : "Visualisasi VTK tidak bisa dimulai.";
+    if (vtkCt && vtkSeg) {
+      vtkCt.innerHTML = "";
+      vtkSeg.innerHTML = "";
+      vtkCt.appendChild(el("p", msg, "muted-note"));
+      vtkSeg.appendChild(el("p", msg, "muted-note"));
+    } else if (vtkContainerLegacy) {
+      vtkContainerLegacy.innerHTML = "";
+      vtkContainerLegacy.appendChild(el("p", msg, "muted-note"));
+    }
   }
 }

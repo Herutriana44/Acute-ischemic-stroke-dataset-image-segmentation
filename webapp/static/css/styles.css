@@ -81,6 +81,33 @@ button,
   background: #000;
 }
 
+.vtk-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.vtk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vtk-panel-title {
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 980px) {
+  .vtk-compare {
+    grid-template-columns: 1fr;
+  }
+}
+
 .papaya-wrap {
   width: 100%;
   height: 720px;

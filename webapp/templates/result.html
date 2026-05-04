@@ -51,8 +51,8 @@
 </section>
 
 <section class="card">
-  <h2>Visualisasi 3D — VTK.js (Volume Render vs Segmentation)</h2>
-  <p>Tampilan dipisah dua panel: <strong>Volume Render (CT)</strong> vs <strong>Segmentation (mask)</strong>. Spasi voxel mengikuti metadata seri. Resolusi dibatasi (downsample) agar tetap responsif di browser.</p>
+  <h2>Visualisasi 3D — Three.js (Volume Render vs Segmentation)</h2>
+  <p>Tampilan dipisah dua panel: <strong>Volume Render (CT surface)</strong> vs <strong>Segmentation (mask)</strong>. Viewer memakai mesh hasil marching-cubes dari pipeline inferensi (lebih kompatibel untuk ngrok/browser).</p>
   {% if result.mesh_ply_colored or result.mesh_3d_colored_zip %}
   <p class="muted-note">Unduh model permukaan (mesh marching cubes): {% if result.mesh_ply_colored %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download>PLY gabungan</a>{% endif %}{% if result.mesh_ply_colored and result.mesh_3d_colored_zip %} · {% endif %}{% if result.mesh_3d_colored_zip %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download>ZIP (OBJ+MTL)</a>{% endif %}.</p>
   {% endif %}
@@ -76,7 +76,7 @@
 {# NOTE: VTK.js is loaded via absolute ESM URLs in viewer3d_vtk.js for maximum browser compatibility. #}
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/viewer3d_vtk.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/viewer3d_three.js') }}"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
 <script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 <script type="text/javascript">

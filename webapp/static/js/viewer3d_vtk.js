@@ -1,11 +1,15 @@
-import "@kitware/vtk.js/Rendering/Profiles/Volume.js";
-import vtkColorTransferFunction from "@kitware/vtk.js/Rendering/Core/ColorTransferFunction.js";
-import vtkDataArray from "@kitware/vtk.js/Common/Core/DataArray.js";
-import vtkImageData from "@kitware/vtk.js/Common/DataModel/ImageData.js";
-import vtkPiecewiseFunction from "@kitware/vtk.js/Common/DataModel/PiecewiseFunction.js";
-import vtkGenericRenderWindow from "@kitware/vtk.js/Rendering/Misc/GenericRenderWindow.js";
-import vtkVolume from "@kitware/vtk.js/Rendering/Core/Volume.js";
-import vtkVolumeMapper from "@kitware/vtk.js/Rendering/Core/VolumeMapper.js";
+// Use absolute CDN imports to avoid importmap incompatibilities (some browsers / embedded viewers).
+const VTK_VER = "28.12.4";
+const VTK_BASE = `https://cdn.jsdelivr.net/npm/@kitware/vtk.js@${VTK_VER}/`;
+
+import `${VTK_BASE}Rendering/Profiles/Volume.js`;
+import vtkColorTransferFunction from `${VTK_BASE}Rendering/Core/ColorTransferFunction.js`;
+import vtkDataArray from `${VTK_BASE}Common/Core/DataArray.js`;
+import vtkImageData from `${VTK_BASE}Common/DataModel/ImageData.js`;
+import vtkPiecewiseFunction from `${VTK_BASE}Common/DataModel/PiecewiseFunction.js`;
+import vtkGenericRenderWindow from `${VTK_BASE}Rendering/Misc/GenericRenderWindow.js`;
+import vtkVolume from `${VTK_BASE}Rendering/Core/Volume.js`;
+import vtkVolumeMapper from `${VTK_BASE}Rendering/Core/VolumeMapper.js`;
 
 const VTK_MAX = 192;
 

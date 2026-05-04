@@ -149,8 +149,9 @@ function prepareVtkContainer(container) {
   container.innerHTML = "";
   const wrap = el("div", "", "vtk-wrap");
   wrap.style.width = "100%";
-  wrap.style.height = "100%";
-  // follow .viewer height (650px) while allowing panel to shrink if needed
+  // Force a non-zero height for VTK canvas sizing (some layouts return 0px on first paint).
+  const h = Math.max(container.clientHeight || 0, 650);
+  wrap.style.height = `${h}px`;
   wrap.style.minHeight = "650px";
   container.appendChild(wrap);
   return wrap;
@@ -182,7 +183,8 @@ async function loadVtkBuffers(metaUrl, huUrl, maskUrl) {
 
 function createGenericRw(container) {
   const genericRw = vtkGenericRenderWindow.newInstance({
-    background: [0.04, 0.05, 0.08],
+    // Slightly brighter background so "black canvas" is less ambiguous.
+    background: [0.16, 0.17, 0.19],
     listenWindowResize: true,
   });
   mountViewer(container, genericRw);
@@ -201,6 +203,17 @@ function renderVolumes(container, volumes) {
   return genericRw;
 }
 
+function summarizeVolumes(huImage, maskImage) {
+  const huRange = huImage.getPointData().getScalars().getRange();
+  const mkRange = maskImage.getPointData().getScalars().getRange();
+  const mkVals = maskImage.getPointData().getScalars().getData();
+  let mkCount = 0;
+  // sample counting (fast enough for <= 192^3; still ok)
+  for (let i = 0; i < mkVals.length; i++) if (mkVals[i] > 0) mkCount++;
+  const pct = mkVals.length ? (100 * mkCount) / mkVals.length : 0;
+  return `HU range: ${huRange[0].toFixed(1)}..${huRange[1].toFixed(1)} | mask: ${mkCount} vox (${pct.toFixed(2)}%) | mask range: ${mkRange[0]}..${mkRange[1]}`;
+}
+
 async function startVtkDicomViewer(opts) {
   const { container, metaUrl, huUrl, maskUrl } = opts;
   if (!container) return;
@@ -213,6 +226,9 @@ async function startVtkDicomViewer(opts) {
     const { huImage, maskImage } = await loadVtkBuffers(metaUrl, huUrl, maskUrl);
     container.innerHTML = "";
     renderVolumes(container, [ctVolumeActor(huImage), maskVolumeActor(maskImage)]);
+    const info = el("p", summarizeVolumes(huImage, maskImage), "muted-note");
+    info.style.marginTop = "8px";
+    container.appendChild(info);
   } catch (e) {
     console.error("[VTK viewer]", e);
     container.innerHTML = "";
@@ -256,7 +272,15 @@ if (payload && (vtkContainerLegacy || (vtkCt && vtkSeg))) {
           renderVolumes(vtkCt, [ctVolumeActor(huImage)]);
 
           // Right: segmentation with faint CT context + stronger mask
-          renderVolumes(vtkSeg, [ctVolumeActorWithOpacityScale(huImage, 0.25), maskVolumeActor(maskImage)]);
+          renderVolumes(vtkSeg, [ctVolumeActorWithOpacityScale(huImage, 0.35), maskVolumeActor(maskImage)]);
+
+          const infoCt = el("p", summarizeVolumes(huImage, maskImage), "muted-note");
+          infoCt.style.marginTop = "8px";
+          vtkCt.appendChild(infoCt);
+
+          const infoSeg = el("p", "Tips: putar (drag), zoom (scroll). Mask = overlay.", "muted-note");
+          infoSeg.style.marginTop = "8px";
+          vtkSeg.appendChild(infoSeg);
           return;
         } catch (e) {
           console.error("[VTK compare viewer]", e);

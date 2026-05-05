@@ -246,3 +246,61 @@ button.papaya-mode.active {
   color: var(--accent);
   background: rgba(14, 165, 233, 0.12);
 }
+
+.seg-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.seg-panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: #0f172a;
+}
+
+.seg-title {
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+.seg-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid #1e293b;
+  background: #000;
+}
+
+.seg-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.slice-view {
+  display: grid;
+  gap: 12px;
+}
+
+.slice-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sep {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 14px 0;
+  opacity: 0.8;
+}

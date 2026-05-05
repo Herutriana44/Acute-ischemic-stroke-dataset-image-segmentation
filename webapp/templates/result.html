@@ -25,45 +25,24 @@
     <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_hu_nii) }}" download="{{ result.ct_hu_nii }}">CT HU — {{ result.ct_hu_nii }}</a></li>
     <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.dicom_series_zip) }}" download="{{ result.dicom_series_zip }}">Arsip DICOM series — {{ result.dicom_series_zip }}</a></li>
     <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename='result.json') }}" download="result.json">Ringkasan metrik JSON — result.json</a></li>
-    {% if result.mesh_ply_colored %}
-    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download="{{ result.mesh_ply_colored }}">Mesh 3D berwarna (PLY: CT + mask) — {{ result.mesh_ply_colored }}</a></li>
-    {% endif %}
-    {% if result.mesh_3d_colored_zip %}
-    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download="{{ result.mesh_3d_colored_zip }}">Mesh 3D (ZIP: OBJ + MTL, dua material) — {{ result.mesh_3d_colored_zip }}</a></li>
-    {% endif %}
   </ul>
 </section>
 
 <section class="card">
-  <h2>Visualisasi 3D (DICOM + Mask)</h2>
-  <p>Objek abu-abu: kontur volume CT. Objek merah: area prediksi lesi.</p>
-  <div id="viewer3d" class="viewer"></div>
-</section>
-
-<section class="card">
-  <h2>Visualisasi (Orthogonal Viewer)</h2>
-  <p><strong>CT + mask (NIfTI)</strong> memakai pasangan <code>{{ result.ct_view_nii }}</code> + <code>{{ result.mask_view_nii }}</code> (susunan H×W×Z, affine sejajar) agar Papaya menampilkan overlay dengan stabil. Mode <strong>DICOM + mask</strong> tidak diubah: tetap <code>.dcm</code> + <code>{{ result.mask_nii }}</code>.</p>
-  <div class="papaya-toolbar" role="group" aria-label="Mode Papaya">
-    <button type="button" class="papaya-mode active" id="papaya-btn-nifti" data-mode="nifti">CT + mask (NIfTI, disarankan)</button>
-    <button type="button" class="papaya-mode" id="papaya-btn-dicom" data-mode="dicom">DICOM + mask</button>
-  </div>
-  <div class="papaya-wrap" id="papaya-host"></div>
-</section>
-
-<section class="card">
-  <h2>Visualisasi 3D — Three.js (Volume Render vs Segmentation)</h2>
-  <p>Tampilan dipisah dua panel: <strong>Volume Render (CT surface)</strong> vs <strong>Segmentation (mask)</strong>. Viewer memakai mesh hasil marching-cubes dari pipeline inferensi (lebih kompatibel untuk ngrok/browser).</p>
-  {% if result.mesh_ply_colored or result.mesh_3d_colored_zip %}
-  <p class="muted-note">Unduh model permukaan (mesh marching cubes): {% if result.mesh_ply_colored %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download>PLY gabungan</a>{% endif %}{% if result.mesh_ply_colored and result.mesh_3d_colored_zip %} · {% endif %}{% if result.mesh_3d_colored_zip %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download>ZIP (OBJ+MTL)</a>{% endif %}.</p>
-  {% endif %}
-  <div class="vtk-compare">
-    <div class="vtk-panel">
-      <div class="vtk-panel-title">VOLUME RENDER</div>
-      <div id="viewer3d-vtk-ct" class="viewer viewer-surface"></div>
-    </div>
-    <div class="vtk-panel">
-      <div class="vtk-panel-title">SEGMENTATION</div>
-      <div id="viewer3d-vtk-seg" class="viewer viewer-surface"></div>
+  <h2>Hasil segmentasi (viewer 2D)</h2>
+  <p class="muted-note">Tampilan hanya overlay per-slice (PNG). Tidak ada visualisasi 3D.</p>
+  <div
+    id="slice-host"
+    data-run-id="{{ result.run_id }}"
+    data-overlay-dir="{{ result.overlay_slices_dir }}"
+    data-slices="{{ result.slices }}"
+    data-url-template="{{ url_for('runs_file', run_id=result.run_id, filename='__REL__') }}"
+  ></div>
+  <div class="slice-view">
+    <img id="slice-img" class="seg-img" alt="Overlay slice hasil segmentasi">
+    <div class="slice-controls">
+      <input id="slice-slider" type="range" value="0">
+      <div id="slice-label" class="muted-note">Slice: -</div>
     </div>
   </div>
 </section>
@@ -71,144 +50,5 @@
 <section class="card">
   <a href="{{ url_for('index') }}" class="button-link">Upload Data Lain</a>
 </section>
-
-<script id="mesh-data" type="application/json">{{ result|tojson }}</script>
-{# NOTE: VTK.js is loaded via absolute ESM URLs in viewer3d_vtk.js for maximum browser compatibility. #}
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-<script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/viewer3d_three.js') }}"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
-<script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
-<script type="text/javascript">
-  (function () {
-    var host = document.getElementById("papaya-host");
-    var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
-    var maskUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}";
-    var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
-    var ctViewUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii) }}";
-    var maskViewUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}";
-
-    function absUrl(u) {
-      try {
-        return new URL(u, window.location.href).href;
-      } catch (e) {
-        return u;
-      }
-    }
-    console.info("[Papaya / inference URLs]", {
-      manifestUrl: absUrl(manifestUrl),
-      maskUrl: absUrl(maskUrl),
-      ctUrl: absUrl(ctUrl),
-      ctViewUrl: absUrl(ctViewUrl),
-      maskViewUrl: absUrl(maskViewUrl),
-    });
-
-    // LUT hangat (bukan grayscale); min/max untuk mask biner 0/1.
-    var maskDisplay = {
-      min: 0,
-      max: 1,
-      alpha: 0.68,
-      lut: "Overlay (Positives)",
-    };
-
-    var dicomUrlsCache = [];
-
-    function mountAndStart(params) {
-      window.papayaParams = params;
-      if (!host) return;
-      host.innerHTML = '<div class="papaya" data-params="papayaParams"></div>';
-      function kick() {
-        if (window.papaya && window.papaya.Container && typeof window.papaya.Container.startPapaya === "function") {
-          window.papaya.Container.startPapaya();
-        }
-      }
-      setTimeout(kick, 0);
-    }
-
-    function baseParams() {
-      var params = [];
-      params["worldSpace"] = true;
-      params["showOrientation"] = true;
-      params["showRuler"] = true;
-      params["smoothDisplay"] = false;
-      params["interpolation"] = "none";
-      return params;
-    }
-
-    function paramsDicomPlusMask(dicomUrls) {
-      var params = baseParams();
-      params["images"] = [dicomUrls, maskUrl];
-      params[maskUrl] = maskDisplay;
-      return params;
-    }
-
-    function paramsNiftiPair() {
-      var params = [];
-      // Pasangan HWZ + affine diagonal: lebih cocok dengan pembaca NIfTI Papaya daripada (Z,H,W) + affine DICOM penuh.
-      params["worldSpace"] = false;
-      params["showOrientation"] = true;
-      params["showRuler"] = true;
-      params["smoothDisplay"] = false;
-      params["interpolation"] = "none";
-      params["images"] = [ctViewUrl, maskViewUrl];
-      params[ctViewUrl] = { min: 0, max: 255 };
-      // Hindari LUT seperti Fire/Spectrum (ujung putih). "Overlay (Positives)" = merah → kuning.
-      params[maskViewUrl] = {
-        min: 0.5,
-        max: 255,
-        alpha: 0.68,
-        lut: "Overlay (Positives)",
-      };
-      return params;
-    }
-
-    function setMode(mode) {
-      var niftiBtn = document.getElementById("papaya-btn-nifti");
-      var dicomBtn = document.getElementById("papaya-btn-dicom");
-      if (niftiBtn) niftiBtn.classList.toggle("active", mode === "nifti");
-      if (dicomBtn) dicomBtn.classList.toggle("active", mode === "dicom");
-
-      if (mode === "nifti") {
-        mountAndStart(paramsNiftiPair());
-        return;
-      }
-      if (!dicomUrlsCache.length) {
-        console.warn("Papaya: tidak ada URL DICOM; tetap pakai NIfTI.");
-        mountAndStart(paramsNiftiPair());
-        if (niftiBtn) niftiBtn.classList.add("active");
-        if (dicomBtn) dicomBtn.classList.remove("active");
-        return;
-      }
-      mountAndStart(paramsDicomPlusMask(dicomUrlsCache));
-    }
-
-    function start() {
-      var niftiBtn = document.getElementById("papaya-btn-nifti");
-      var dicomBtn = document.getElementById("papaya-btn-dicom");
-      if (niftiBtn) niftiBtn.addEventListener("click", function () { setMode("nifti"); });
-      if (dicomBtn) dicomBtn.addEventListener("click", function () { setMode("dicom"); });
-
-      fetch(manifestUrl, { cache: "no-store" })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          dicomUrlsCache = (data && data.dicom_urls) ? data.dicom_urls : [];
-          if (!dicomUrlsCache.length) {
-            console.warn("Papaya: manifest DICOM kosong; hanya mode NIfTI.");
-          }
-          setMode("nifti");
-        })
-        .catch(function (e) {
-          console.error("Papaya: gagal memuat manifest.", e);
-          dicomUrlsCache = [];
-          setMode("nifti");
-        });
-    }
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", start);
-    } else {
-      start();
-    }
-  })();
-</script>
+<script src="{{ url_for('static', filename='js/slice_viewer.js') }}"></script>
 {% endblock %}

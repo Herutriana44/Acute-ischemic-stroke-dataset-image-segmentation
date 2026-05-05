@@ -1,12 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Upload DICOM Archive{% endblock %}
+{% block title %}Upload Gambar{% endblock %}
 {% block content %}
 <section class="card">
-  <h2>Unggah Arsip DICOM CT</h2>
-  <p>Pipeline ini memproses <strong>hanya series DICOM CT</strong> (computed tomography). Format arsip: zip, rar, tar, tar.gz, tgz, 7z, dan sejenisnya. Struktur mengikuti contoh <code>0019983/CT/*.dcm</code>. Jika satu arsip berisi beberapa modalitas, series <strong>CT</strong> dipilih otomatis (tag DICOM Modality atau folder bernama <code>CT</code>).</p>
-  <form action="{{ url_for('predict') }}" method="post" enctype="multipart/form-data" class="upload-form">
-    <input type="file" name="dicom_archive" accept=".zip,.rar,.tar,.gz,.tgz,.bz2,.xz,.7z" required>
-    <button type="submit">Run Inference & Visualize</button>
+  <h2>Unggah Gambar (2D)</h2>
+  <p>Upload <strong>hanya file gambar</strong> seperti JPG/JPEG/PNG/WEBP/BMP/TIFF (dan ekstensi gambar umum lainnya). Output web hanya menampilkan <strong>hasil segmentasi gambar</strong> (tanpa visualisasi 3D).</p>
+  <form action="{{ url_for('predict_image') }}" method="post" enctype="multipart/form-data" class="upload-form">
+    <input type="file" name="image_file" accept="image/*,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.gif" required>
+    <button type="submit">Run Segmentation</button>
   </form>
+</section>
+
+<section class="card">
+  <details>
+    <summary><strong>Mode advanced: Upload Arsip DICOM CT</strong></summary>
+    <p class="muted-note">Mode ini tetap tersedia, namun halaman hasilnya hanya menampilkan viewer 2D (tanpa 3D).</p>
+    <form action="{{ url_for('predict') }}" method="post" enctype="multipart/form-data" class="upload-form">
+      <input type="file" name="dicom_archive" accept=".zip,.rar,.tar,.gz,.tgz,.bz2,.xz,.7z" required>
+      <button type="submit">Run Inference</button>
+    </form>
+
+    <hr class="sep">
+
+    <p class="muted-note">Jika Anda hanya punya <strong>1 file DICOM</strong> (mis. satu slice <code>.dcm</code>), gunakan form ini. Output tetap 2D (overlay + mask), tanpa 3D.</p>
+    <form action="{{ url_for('predict_dicom_single') }}" method="post" enctype="multipart/form-data" class="upload-form">
+      <input type="file" name="dicom_file" accept=".dcm,application/dicom" required>
+      <button type="submit">Run Single-Slice</button>
+    </form>
+  </details>
 </section>
 {% endblock %}

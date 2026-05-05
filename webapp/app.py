@@ -3,13 +3,29 @@ from __future__ import annotations
 import json
 import math
 import os
+import uuid
 from pathlib import Path
 
 import numpy as np
 from flask import Flask, Response, abort, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 
 from webapp.services.archive_service import extract_archive, find_dicom_series_dir
-from webapp.services.inference_service import InferenceError, run_inference
+from webapp.services.inference_service import (
+    InferenceError,
+    run_inference,
+    run_inference_dicom_single,
+    run_inference_image,
+)
+
+try:
+    from PIL import Image
+except Exception:  # pragma: no cover
+    Image = None  # type: ignore[assignment]
+
+try:
+    from werkzeug.utils import secure_filename
+except Exception:  # pragma: no cover
+    secure_filename = None  # type: ignore[assignment]
 
 
 def create_app() -> Flask:
@@ -55,6 +71,12 @@ def create_app() -> Flask:
             send_kw["mimetype"] = "model/obj"
         elif lower.endswith(".mtl"):
             send_kw["mimetype"] = "model/mtl"
+        elif lower.endswith(".png"):
+            send_kw["mimetype"] = "image/png"
+        elif lower.endswith((".jpg", ".jpeg")):
+            send_kw["mimetype"] = "image/jpeg"
+        elif lower.endswith(".webp"):
+            send_kw["mimetype"] = "image/webp"
 
         resp = send_from_directory(run_dir, filename, **send_kw)
         # Make remote-viewer loads (ngrok) more reliable.
@@ -248,6 +270,147 @@ def create_app() -> Flask:
             return render_template("error.html", error_message=f"Gagal memproses data: {exc}"), 500
 
         return render_template("result.html", result=result)
+
+    _ALLOWED_IMAGE_SUFFIXES = {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".bmp",
+        ".tif",
+        ".tiff",
+        ".gif",
+    }
+
+    def _is_allowed_image(filename: str) -> bool:
+        name = (filename or "").strip().lower()
+        if not name:
+            return False
+        p = Path(name)
+        return p.suffix.lower() in _ALLOWED_IMAGE_SUFFIXES
+
+    @app.route("/predict_image", methods=["POST"])
+    def predict_image():
+        image_file = request.files.get("image_file")
+        if image_file is None or (image_file.filename or "") == "":
+            flash("Pilih file gambar terlebih dahulu.")
+            return redirect(url_for("index"))
+
+        filename = image_file.filename or ""
+        if not _is_allowed_image(filename):
+            return render_template(
+                "error.html",
+                error_message="Format file tidak didukung. Gunakan gambar: png/jpg/jpeg/webp/bmp/tif/tiff/gif.",
+            ), 400
+
+        if Image is None or secure_filename is None:
+            return render_template(
+                "error.html",
+                error_message="Server belum siap untuk membaca gambar (dependency PIL/Werkzeug).",
+            ), 500
+
+        # Verifikasi ini benar-benar gambar sebelum disimpan.
+        try:
+            image_file.stream.seek(0)
+            with Image.open(image_file.stream) as im:
+                im.verify()
+            image_file.stream.seek(0)
+        except Exception:
+            return render_template(
+                "error.html",
+                error_message="File terunggah bukan gambar valid atau file korup.",
+            ), 400
+
+        run_id = uuid.uuid4().hex[:12]
+        uploads_dir: Path = app.config["UPLOAD_DIR"]
+        run_upload_dir = uploads_dir / run_id
+        run_upload_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_name = secure_filename(filename) or "image"
+        upload_path = run_upload_dir / safe_name
+        image_file.save(str(upload_path))
+
+        try:
+            result = run_inference_image(
+                image_file_path=upload_path,
+                run_id=run_id,
+                model_path=app.config["MODEL_PATH"],
+                runs_dir=app.config["RUNS_DIR"],
+            )
+        except InferenceError as exc:
+            return render_template("error.html", error_message=str(exc)), 400
+        except Exception as exc:  # pragma: no cover
+            return render_template("error.html", error_message=f"Gagal memproses gambar: {exc}"), 500
+
+        return render_template("result_image.html", result=result)
+
+    def _is_allowed_dicom(filename: str) -> bool:
+        name = (filename or "").strip().lower()
+        if not name:
+            return False
+        return Path(name).suffix.lower() in {".dcm"}
+
+    @app.route("/predict_dicom_single", methods=["POST"])
+    def predict_dicom_single():
+        dicom_file = request.files.get("dicom_file")
+        if dicom_file is None or (dicom_file.filename or "") == "":
+            flash("Pilih file DICOM (.dcm) terlebih dahulu.")
+            return redirect(url_for("index"))
+
+        filename = dicom_file.filename or ""
+        if not _is_allowed_dicom(filename):
+            return render_template(
+                "error.html",
+                error_message="Format file tidak didukung. Upload 1 file DICOM dengan ekstensi .dcm.",
+            ), 400
+
+        if secure_filename is None:
+            return render_template(
+                "error.html",
+                error_message="Server belum siap (Werkzeug).",
+            ), 500
+
+        # Validasi cepat bahwa ini DICOM yang bisa dibaca (tanpa perlu pipeline 3D).
+        try:
+            import pydicom
+
+            dicom_file.stream.seek(0)
+            ds = pydicom.dcmread(dicom_file.stream, stop_before_pixels=False, force=True)
+            if not hasattr(ds, "PixelData"):
+                return render_template(
+                    "error.html",
+                    error_message="File DICOM tidak memiliki PixelData (bukan image slice).",
+                ), 400
+            _ = ds.pixel_array  # trigger decode
+            dicom_file.stream.seek(0)
+        except Exception:
+            return render_template(
+                "error.html",
+                error_message="File terunggah bukan DICOM image yang valid atau file korup.",
+            ), 400
+
+        run_id = uuid.uuid4().hex[:12]
+        uploads_dir: Path = app.config["UPLOAD_DIR"]
+        run_upload_dir = uploads_dir / run_id
+        run_upload_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_name = secure_filename(filename) or "slice.dcm"
+        upload_path = run_upload_dir / safe_name
+        dicom_file.save(str(upload_path))
+
+        try:
+            result = run_inference_dicom_single(
+                dicom_file_path=upload_path,
+                run_id=run_id,
+                model_path=app.config["MODEL_PATH"],
+                runs_dir=app.config["RUNS_DIR"],
+            )
+        except InferenceError as exc:
+            return render_template("error.html", error_message=str(exc)), 400
+        except Exception as exc:  # pragma: no cover
+            return render_template("error.html", error_message=f"Gagal memproses DICOM: {exc}"), 500
+
+        return render_template("result_image.html", result=result)
 
     return app
 

@@ -12,6 +12,7 @@ import nibabel as nib
 import torch
 from skimage.measure import marching_cubes
 from PIL import Image
+from werkzeug.utils import secure_filename
 
 from infer_dicom_unet import (
     IMAGENET_MEAN,
@@ -54,6 +55,30 @@ class InferenceResult:
     shape_hw: tuple[int, int]
     hu_mesh: dict | None
     lesion_mesh: dict | None
+
+
+@dataclass
+class ImageInferenceResult:
+    run_id: str
+    input_image: str
+    out_dir: str
+    overlay_png: str
+    mask_png: str
+    width: int
+    height: int
+
+
+@dataclass
+class DicomSingleInferenceResult:
+    run_id: str
+    dicom_file: str
+    out_dir: str
+    overlay_png: str
+    mask_png: str
+    width: int
+    height: int
+    window_center: float
+    window_width: float
 
 
 def _downsample_volume(volume: np.ndarray, max_dim: int = 128) -> tuple[np.ndarray, int]:
@@ -344,4 +369,170 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
 
     payload = asdict(result)
     (out_dir / "result.json").write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+def run_inference_image(
+    image_file_path: Path,
+    run_id: str,
+    model_path: Path,
+    runs_dir: Path,
+) -> dict:
+    """Inferensi segmentasi untuk 1 gambar 2D (PNG/JPG/WEBP/BMP/TIFF, dll). Output: overlay + mask PNG."""
+    if not model_path.exists():
+        raise InferenceError(f"Model tidak ditemukan di: {model_path}")
+
+    out_dir = runs_dir / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    in_name = secure_filename(image_file_path.name)
+    if not in_name:
+        in_name = "input_image"
+    input_copy = out_dir / in_name
+    if image_file_path.resolve() != input_copy.resolve():
+        shutil.copy2(image_file_path, input_copy)
+
+    try:
+        with Image.open(input_copy) as im:
+            im = im.convert("L")  # grayscale
+            w, h = im.size
+            img_u8 = np.array(im, dtype=np.uint8)  # (H,W)
+    except Exception as exc:
+        raise InferenceError(f"Gagal membaca gambar: {exc}") from exc
+
+    img01 = (img_u8.astype(np.float32) / 255.0).clip(0.0, 1.0)
+    img01 = resize_if_needed(img01, None).astype(np.float32)
+
+    model, _ = build_unet_from_checkpoint(model_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+
+    with torch.no_grad():
+        rgb = np.stack([img01, img01, img01], axis=-1)  # (H,W,3)
+        rgb = (rgb - IMAGENET_MEAN) / IMAGENET_STD
+        tensor_img = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0).float().to(device)
+        logits = model(tensor_img)
+        prob = torch.sigmoid(logits)[0, 0].detach().cpu().numpy()
+        mask = (prob > 0.5).astype(np.uint8)
+        mask = postprocess_mask2d(mask, min_area=64, closing_radius=2)
+
+    # Mask: 0/255 agar terlihat jelas sebagai PNG.
+    mask_png_path = out_dir / "mask.png"
+    Image.fromarray((mask * 255).astype(np.uint8), mode="L").save(mask_png_path, optimize=True)
+
+    # Overlay: grayscale + highlight merah pada area mask.
+    alpha = 0.40
+    rgb_base = np.stack([img_u8, img_u8, img_u8], axis=-1).astype(np.float32)  # (H,W,3)
+    m = mask.astype(bool)
+    if m.any():
+        overlay = np.zeros_like(rgb_base)
+        overlay[..., 0] = 255.0
+        overlay[..., 1] = 70.0
+        overlay[..., 2] = 70.0
+        rgb_base[m] = (1.0 - alpha) * rgb_base[m] + alpha * overlay[m]
+    overlay_png_path = out_dir / "overlay.png"
+    Image.fromarray(np.clip(rgb_base, 0, 255).astype(np.uint8), mode="RGB").save(
+        overlay_png_path, optimize=True
+    )
+
+    result = ImageInferenceResult(
+        run_id=run_id,
+        input_image=input_copy.name,
+        out_dir=str(out_dir),
+        overlay_png=overlay_png_path.name,
+        mask_png=mask_png_path.name,
+        width=int(w),
+        height=int(h),
+    )
+    payload = asdict(result)
+    (out_dir / "result_image.json").write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+def run_inference_dicom_single(
+    dicom_file_path: Path,
+    run_id: str,
+    model_path: Path,
+    runs_dir: Path,
+    window_center: float = 40.0,
+    window_width: float = 80.0,
+) -> dict:
+    """Inferensi segmentasi untuk 1 file DICOM CT (1 slice) → output overlay + mask PNG (tanpa 3D)."""
+    if not model_path.exists():
+        raise InferenceError(f"Model tidak ditemukan di: {model_path}")
+
+    out_dir = runs_dir / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    in_name = secure_filename(dicom_file_path.name) or "slice.dcm"
+    input_copy = out_dir / in_name
+    if dicom_file_path.resolve() != input_copy.resolve():
+        shutil.copy2(dicom_file_path, input_copy)
+
+    try:
+        import pydicom
+
+        ds = pydicom.dcmread(str(input_copy), force=True)
+        if not hasattr(ds, "PixelData"):
+            raise InferenceError("File DICOM tidak memiliki PixelData (bukan image slice).")
+        px = ds.pixel_array.astype(np.float32)
+        slope = float(getattr(ds, "RescaleSlope", 1.0) or 1.0)
+        intercept = float(getattr(ds, "RescaleIntercept", 0.0) or 0.0)
+        hu = px * slope + intercept  # (H,W) float32
+    except InferenceError:
+        raise
+    except Exception as exc:
+        raise InferenceError(f"Gagal membaca DICOM: {exc}") from exc
+
+    # Windowing HU -> [0,1]
+    img01 = window_hu(hu, center=float(window_center), width=float(window_width)).astype(np.float32)
+
+    model, _ = build_unet_from_checkpoint(model_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+
+    with torch.no_grad():
+        rgb = np.stack([img01, img01, img01], axis=-1)  # (H,W,3)
+        rgb = (rgb - IMAGENET_MEAN) / IMAGENET_STD
+        tensor_img = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0).float().to(device)
+        logits = model(tensor_img)
+        prob = torch.sigmoid(logits)[0, 0].detach().cpu().numpy()
+        mask = (prob > 0.5).astype(np.uint8)
+        mask = postprocess_mask2d(mask, min_area=64, closing_radius=2)
+
+    h, w = int(img01.shape[0]), int(img01.shape[1])
+
+    mask_png_path = out_dir / "mask.png"
+    Image.fromarray((mask * 255).astype(np.uint8), mode="L").save(mask_png_path, optimize=True)
+
+    # Overlay dibuat dari citra windowed (bukan HU mentah) supaya kontras konsisten.
+    base_u8 = np.clip(img01 * 255.0, 0, 255).round().astype(np.uint8)
+    alpha = 0.40
+    rgb_base = np.stack([base_u8, base_u8, base_u8], axis=-1).astype(np.float32)
+    m = mask.astype(bool)
+    if m.any():
+        overlay = np.zeros_like(rgb_base)
+        overlay[..., 0] = 255.0
+        overlay[..., 1] = 70.0
+        overlay[..., 2] = 70.0
+        rgb_base[m] = (1.0 - alpha) * rgb_base[m] + alpha * overlay[m]
+
+    overlay_png_path = out_dir / "overlay.png"
+    Image.fromarray(np.clip(rgb_base, 0, 255).astype(np.uint8), mode="RGB").save(
+        overlay_png_path, optimize=True
+    )
+
+    result = DicomSingleInferenceResult(
+        run_id=run_id,
+        dicom_file=input_copy.name,
+        out_dir=str(out_dir),
+        overlay_png=overlay_png_path.name,
+        mask_png=mask_png_path.name,
+        width=w,
+        height=h,
+        window_center=float(window_center),
+        window_width=float(window_width),
+    )
+    payload = asdict(result)
+    (out_dir / "result_dicom_single.json").write_text(json.dumps(payload), encoding="utf-8")
     return payload

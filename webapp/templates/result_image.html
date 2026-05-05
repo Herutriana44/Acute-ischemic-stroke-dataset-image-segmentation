@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Hasil Segmentasi Gambar{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Hasil Segmentasi (Gambar)</h2>
+  <div class="metrics-grid">
+    <div><strong>Run ID</strong><span>{{ result.run_id }}</span></div>
+    <div><strong>Resolusi</strong><span>{{ result.width }} x {{ result.height }}</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Hasil segmentasi</h2>
+  <p class="muted-note">Yang ditampilkan hanya overlay hasil segmentasi (2D).</p>
+  <div class="seg-grid">
+    <div class="seg-panel">
+      <div class="seg-title">OVERLAY</div>
+      <img class="seg-img" alt="Overlay segmentasi" src="{{ url_for('runs_file', run_id=result.run_id, filename=result.overlay_png) }}">
+    </div>
+  </div>
+  <div class="seg-actions">
+    <a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_png) }}" download="{{ result.mask_png }}">Unduh mask — {{ result.mask_png }}</a>
+    <span class="muted-note">·</span>
+    <a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.overlay_png) }}" download="{{ result.overlay_png }}">Unduh overlay — {{ result.overlay_png }}</a>
+  </div>
+</section>
+
+<section class="card">
+  <a href="{{ url_for('index') }}" class="button-link">Upload Gambar Lain</a>
+</section>
+{% endblock %}
+

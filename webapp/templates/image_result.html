@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Hasil Segmentasi 2D{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Hasil Segmentasi 2D</h2>
+  <div class="metrics-grid">
+    <div><strong>Run ID</strong><span>{{ result.run_id }}</span></div>
+    <div><strong>Input</strong><span>{{ result.input_name }}</span></div>
+    <div><strong>Resolusi</strong><span>{{ result.shape_hw[0] }} x {{ result.shape_hw[1] }}</span></div>
+    <div><strong>Lesion Pixels</strong><span>{{ result.lesion_pixels }}</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Overlay (CT/Image + Mask)</h2>
+  <p class="muted-note">Mode ini hanya menampilkan hasil 2D (tanpa visualisasi 3D).</p>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
+    <div>
+      <div class="muted-note"><strong>Original</strong></div>
+      <img alt="original" style="max-width:420px; width:100%; height:auto; border-radius:12px;"
+           src="{{ url_for('runs_file', run_id=result.run_id, filename=result.original_png) }}">
+    </div>
+    <div>
+      <div class="muted-note"><strong>Mask</strong></div>
+      <img alt="mask" style="max-width:420px; width:100%; height:auto; border-radius:12px;"
+           src="{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_png) }}">
+    </div>
+    <div>
+      <div class="muted-note"><strong>Overlay</strong></div>
+      <img alt="overlay" style="max-width:420px; width:100%; height:auto; border-radius:12px;"
+           src="{{ url_for('runs_file', run_id=result.run_id, filename=result.overlay_png) }}">
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Unduh</h2>
+  <ul class="download-list">
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.original_png) }}" download>Original (PNG)</a></li>
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_png) }}" download>Mask (PNG)</a></li>
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.overlay_png) }}" download>Overlay (PNG)</a></li>
+    <li><a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename='result.json') }}" download="result.json">Ringkasan metrik JSON — result.json</a></li>
+  </ul>
+</section>
+
+<section class="card">
+  <a href="{{ url_for('index') }}" class="button-link">Upload Data Lain</a>
+</section>
+{% endblock %}
+

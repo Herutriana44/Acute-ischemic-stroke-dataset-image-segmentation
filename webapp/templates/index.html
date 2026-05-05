@@ -2,6 +2,15 @@
 {% block title %}Upload DICOM Archive{% endblock %}
 {% block content %}
 <section class="card">
+  <h2>Unggah Single Image (2D saja)</h2>
+  <p>Mode ini menerima <strong>hanya file gambar</strong> (mis. JPG/JPEG/PNG/BMP/TIF/WebP). Output yang ditampilkan hanya <strong>hasil segmentasi 2D</strong> (tanpa visual 3D).</p>
+  <form action="{{ url_for('predict_image') }}" method="post" enctype="multipart/form-data" class="upload-form">
+    <input type="file" name="image_file" accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.webp" required>
+    <button type="submit">Run Inference (2D)</button>
+  </form>
+</section>
+
+<section class="card">
   <h2>Unggah Arsip DICOM CT</h2>
   <p>Pipeline ini memproses <strong>hanya series DICOM CT</strong> (computed tomography). Format arsip: zip, rar, tar, tar.gz, tgz, 7z, dan sejenisnya. Struktur mengikuti contoh <code>0019983/CT/*.dcm</code>. Jika satu arsip berisi beberapa modalitas, series <strong>CT</strong> dipilih otomatis (tag DICOM Modality atau folder bernama <code>CT</code>).</p>
   <form action="{{ url_for('predict') }}" method="post" enctype="multipart/form-data" class="upload-form">

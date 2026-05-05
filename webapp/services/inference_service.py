@@ -12,6 +12,7 @@ import nibabel as nib
 import torch
 from skimage.measure import marching_cubes
 from PIL import Image
+from werkzeug.utils import secure_filename
 
 from infer_dicom_unet import (
     IMAGENET_MEAN,
@@ -54,6 +55,7 @@ class InferenceResult:
     shape_hw: tuple[int, int]
     hu_mesh: dict | None
     lesion_mesh: dict | None
+    enable_3d: bool
 
 
 def _downsample_volume(volume: np.ndarray, max_dim: int = 128) -> tuple[np.ndarray, int]:
@@ -201,6 +203,8 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     except Exception as exc:
         raise InferenceError(f"Gagal membaca DICOM series: {exc}") from exc
 
+    enable_3d = len(slices) > 1
+
     # Urutan slice untuk Papaya/manifest: harus sama dengan stacking volume + mask (bukan sort nama file).
     (dicom_series_dir / "slice_order.json").write_text(
         json.dumps({"ordered_filenames": [Path(s.path).name for s in slices]}),
@@ -234,44 +238,48 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
     lesion_mm3 = float(lesion_vox * voxel_mm3)
     lesion_ml = lesion_mm3 / 1000.0
 
-    # Mesh CT dan lesi harus memakai grid + spacing fisik yang sama. Sebelumnya CT
-    # di-downsample tanpa menaikkan spacing → kontur CT "mengecil" ke dekat origin
-    # sementara lesi memakai voxel penuh → tampak jauh dan tidak proporsional.
-    mesh_max_dim = 100
-    hu_volume_for_mesh, stride = _downsample_volume(hu_vol, max_dim=mesh_max_dim)
-    mask_for_mesh = masks.astype(np.float32)[::stride, ::stride, ::stride]
-    mesh_spacing = (stride * ps_row, stride * ps_col, stride * ps_z)
-    hu_level = float(np.percentile(hu_volume_for_mesh, 60))
-    hu_surf = _marching_surface(hu_volume_for_mesh, mesh_spacing, hu_level)
-    lesion_surf = (
-        _marching_surface(mask_for_mesh, mesh_spacing, 0.5) if lesion_vox > 0 else None
-    )
-    hu_mesh = _mesh_to_json_from_surface(*hu_surf) if hu_surf else None
-    lesion_mesh = _mesh_to_json_from_surface(*lesion_surf) if lesion_surf else None
-
-    # Warna selaras viewer 3D: CT abu-biru terang, lesi oranye (RGB 0–255).
-    ct_rgb = (188, 200, 218)
-    lesion_rgb = (234, 88, 12)
-    mesh_ply_name = "mesh_ct_lesion_colored.ply"
-    ply_parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int]]] = []
-    obj_parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int], str]] = []
-    if hu_surf:
-        ply_parts.append((*hu_surf, ct_rgb))
-        obj_parts.append((*hu_surf, ct_rgb, "ct_surface"))
-    if lesion_surf:
-        ply_parts.append((*lesion_surf, lesion_rgb))
-        obj_parts.append((*lesion_surf, lesion_rgb, "lesion_mask"))
+    hu_mesh = None
+    lesion_mesh = None
+    mesh_ply_name = ""
     mesh_3d_zip = ""
-    if ply_parts:
-        _write_colored_combined_ply(out_dir / mesh_ply_name, ply_parts)
-        zname = _write_colored_obj_zip(out_dir, obj_parts)
-        if zname:
-            mesh_3d_zip = zname
-    else:
-        mesh_ply_name = ""
+    if enable_3d:
+        # Mesh CT dan lesi harus memakai grid + spacing fisik yang sama. Sebelumnya CT
+        # di-downsample tanpa menaikkan spacing → kontur CT "mengecil" ke dekat origin
+        # sementara lesi memakai voxel penuh → tampak jauh dan tidak proporsional.
+        mesh_max_dim = 100
+        hu_volume_for_mesh, stride = _downsample_volume(hu_vol, max_dim=mesh_max_dim)
+        mask_for_mesh = masks.astype(np.float32)[::stride, ::stride, ::stride]
+        mesh_spacing = (stride * ps_row, stride * ps_col, stride * ps_z)
+        hu_level = float(np.percentile(hu_volume_for_mesh, 60))
+        hu_surf = _marching_surface(hu_volume_for_mesh, mesh_spacing, hu_level)
+        lesion_surf = (
+            _marching_surface(mask_for_mesh, mesh_spacing, 0.5) if lesion_vox > 0 else None
+        )
+        hu_mesh = _mesh_to_json_from_surface(*hu_surf) if hu_surf else None
+        lesion_mesh = _mesh_to_json_from_surface(*lesion_surf) if lesion_surf else None
 
-    np.save(out_dir / "hu_volume.npy", hu_vol)
-    np.save(out_dir / "mask_pred.npy", masks)
+        # Warna selaras viewer 3D: CT abu-biru terang, lesi oranye (RGB 0–255).
+        ct_rgb = (188, 200, 218)
+        lesion_rgb = (234, 88, 12)
+        mesh_ply_name = "mesh_ct_lesion_colored.ply"
+        ply_parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int]]] = []
+        obj_parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int], str]] = []
+        if hu_surf:
+            ply_parts.append((*hu_surf, ct_rgb))
+            obj_parts.append((*hu_surf, ct_rgb, "ct_surface"))
+        if lesion_surf:
+            ply_parts.append((*lesion_surf, lesion_rgb))
+            obj_parts.append((*lesion_surf, lesion_rgb, "lesion_mask"))
+        if ply_parts:
+            _write_colored_combined_ply(out_dir / mesh_ply_name, ply_parts)
+            zname = _write_colored_obj_zip(out_dir, obj_parts)
+            if zname:
+                mesh_3d_zip = zname
+        else:
+            mesh_ply_name = ""
+
+        np.save(out_dir / "hu_volume.npy", hu_vol)
+        np.save(out_dir / "mask_pred.npy", masks)
 
     affine, _ = dicom_affine_from_slices(slices)
     ct_hu_nii_path = out_dir / "ct_hu.nii.gz"
@@ -340,6 +348,94 @@ def run_inference(dicom_dir: Path, run_id: str, model_path: Path, runs_dir: Path
         shape_hw=(masks.shape[1], masks.shape[2]),
         hu_mesh=hu_mesh,
         lesion_mesh=lesion_mesh,
+        enable_3d=enable_3d,
+    )
+
+    payload = asdict(result)
+    (out_dir / "result.json").write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+@dataclass
+class ImageInferenceResult:
+    run_id: str
+    out_dir: str
+    input_name: str
+    original_png: str
+    mask_png: str
+    overlay_png: str
+    lesion_pixels: int
+    shape_hw: tuple[int, int]
+    enable_3d: bool
+
+
+def run_inference_image(image_path: Path, run_id: str, model_path: Path, runs_dir: Path) -> dict:
+    if not model_path.exists():
+        raise InferenceError(f"Model tidak ditemukan di: {model_path}")
+
+    out_dir = runs_dir / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        img = Image.open(image_path).convert("L")
+    except Exception as exc:
+        raise InferenceError(f"Gagal membaca image: {exc}") from exc
+
+    arr_u8 = np.array(img, dtype=np.uint8)
+    vol01 = (arr_u8.astype(np.float32) / 255.0).clip(0.0, 1.0)
+
+    model, _ = build_unet_from_checkpoint(model_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+
+    with torch.no_grad():
+        img_resized = resize_if_needed(vol01, None)
+        rgb = np.stack([img_resized, img_resized, img_resized], axis=-1)
+        rgb = (rgb - IMAGENET_MEAN) / IMAGENET_STD
+        tensor_img = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0).float().to(device)
+        logits = model(tensor_img)
+        prob = torch.sigmoid(logits)[0, 0].detach().cpu().numpy()
+        mask = (prob > 0.5).astype(np.uint8)
+        mask = postprocess_mask2d(mask, min_area=64, closing_radius=2)
+
+    # Jika resize_if_needed mengubah ukuran, kembalikan ke ukuran input.
+    if mask.shape != arr_u8.shape:
+        mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        mask_img = mask_img.resize((arr_u8.shape[1], arr_u8.shape[0]), resample=Image.NEAREST)
+        mask = (np.array(mask_img) > 127).astype(np.uint8)
+
+    lesion_px = int(mask.sum())
+
+    original_png = "input.png"
+    mask_png = "mask_pred.png"
+    overlay_png = "overlay.png"
+
+    Image.fromarray(arr_u8).save(out_dir / original_png, optimize=True)
+    Image.fromarray((mask * 255).astype(np.uint8)).save(out_dir / mask_png, optimize=True)
+
+    # Overlay merah pada area mask.
+    rgb = np.stack([arr_u8, arr_u8, arr_u8], axis=-1).astype(np.float32)
+    alpha = 0.35
+    m = mask.astype(bool)
+    if m.any():
+        overlay = np.zeros_like(rgb)
+        overlay[..., 0] = 255.0
+        overlay[..., 1] = 70.0
+        overlay[..., 2] = 70.0
+        rgb[m] = (1.0 - alpha) * rgb[m] + alpha * overlay[m]
+    Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).save(out_dir / overlay_png, optimize=True)
+
+    input_name = secure_filename(image_path.name) or "image"
+    result = ImageInferenceResult(
+        run_id=run_id,
+        out_dir=str(out_dir),
+        input_name=input_name,
+        original_png=original_png,
+        mask_png=mask_png,
+        overlay_png=overlay_png,
+        lesion_pixels=lesion_px,
+        shape_hw=(int(arr_u8.shape[0]), int(arr_u8.shape[1])),
+        enable_3d=False,
     )
 
     payload = asdict(result)

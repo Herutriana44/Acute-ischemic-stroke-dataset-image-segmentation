@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import math
 import os
+import uuid
 from pathlib import Path
 
 import numpy as np
 from flask import Flask, Response, abort, flash, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 
 from webapp.services.archive_service import extract_archive, find_dicom_series_dir
-from webapp.services.inference_service import InferenceError, run_inference
+from webapp.services.inference_service import InferenceError, run_inference, run_inference_image
 
 
 def create_app() -> Flask:
@@ -29,6 +30,9 @@ def create_app() -> Flask:
     @app.route("/", methods=["GET"])
     def index():
         return render_template("index.html")
+
+    def _new_run_id() -> str:
+        return uuid.uuid4().hex[:12]
 
     @app.route("/runs/<run_id>/<path:filename>", methods=["GET"])
     def runs_file(run_id: str, filename: str):
@@ -62,6 +66,44 @@ def create_app() -> Flask:
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["X-Content-Type-Options"] = "nosniff"
         return resp
+
+    @app.route("/predict_image", methods=["POST"])
+    def predict_image():
+        image_file = request.files.get("image_file")
+        if image_file is None or image_file.filename == "":
+            flash("Pilih file image terlebih dahulu.")
+            return redirect(url_for("index"))
+
+        allowed = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+        name = (image_file.filename or "").strip()
+        suffix = Path(name).suffix.lower()
+        if suffix not in allowed:
+            return (
+                render_template(
+                    "error.html",
+                    error_message="Format tidak didukung. Unggah hanya file gambar (jpg/jpeg/png/bmp/tif/tiff/webp).",
+                ),
+                400,
+            )
+
+        run_id = _new_run_id()
+        out_dir: Path = app.config["RUNS_DIR"] / run_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        image_path = out_dir / f"input{suffix}"
+        try:
+            image_file.save(str(image_path))
+            result = run_inference_image(
+                image_path=image_path,
+                run_id=run_id,
+                model_path=app.config["MODEL_PATH"],
+                runs_dir=app.config["RUNS_DIR"],
+            )
+        except InferenceError as exc:
+            return render_template("error.html", error_message=str(exc)), 400
+        except Exception as exc:  # pragma: no cover
+            return render_template("error.html", error_message=f"Gagal memproses image: {exc}"), 500
+
+        return render_template("image_result.html", result=result)
 
     @app.route("/runs/<run_id>/dicom_manifest", methods=["GET"])
     def dicom_manifest(run_id: str):

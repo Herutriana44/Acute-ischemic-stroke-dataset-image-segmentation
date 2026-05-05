@@ -1,49 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Upload Gambar{% endblock %}
+{% block title %}Upload DICOM Archive{% endblock %}
 {% block content %}
 <section class="card">
-  <h2>Pilih jenis upload</h2>
-  <p class="muted-note">Pilih dulu mode input yang Anda punya. Output web hanya menampilkan <strong>hasil segmentasi 2D</strong> (tanpa 3D).</p>
-
-  <div class="mode-chooser" role="tablist" aria-label="Pilihan jenis upload">
-    <button type="button" class="mode-btn active" data-mode="image" role="tab" aria-selected="true">Image</button>
-    <button type="button" class="mode-btn" data-mode="dicom-single" role="tab" aria-selected="false">Single DICOM</button>
-    <button type="button" class="mode-btn" data-mode="dicom-archive" role="tab" aria-selected="false">Full DICOM (Archive)</button>
-  </div>
-
-  <div class="mode-panels">
-    <section class="mode-panel" data-panel="image" role="tabpanel">
-      <h3 class="mode-title">Upload Image (2D)</h3>
-      <p>Upload <strong>hanya file gambar</strong> seperti JPG/JPEG/PNG/WEBP/BMP/TIFF (dan ekstensi gambar umum lainnya).</p>
-      <form action="{{ url_for('predict_image') }}" method="post" enctype="multipart/form-data" class="upload-form">
-        <input type="file" name="image_file" accept="image/*,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.gif" required>
-        <button type="submit">Run Segmentation</button>
-      </form>
-    </section>
-
-    <section class="mode-panel hidden" data-panel="dicom-single" role="tabpanel">
-      <h3 class="mode-title">Upload Single DICOM (1 file .dcm)</h3>
-      <p class="muted-note">Untuk kasus DICOM yang diketahui hanya <strong>1 file</strong>. Tetap diproses sebagai 2D (overlay + mask), tanpa 3D.</p>
-      <form action="{{ url_for('predict_dicom_single') }}" method="post" enctype="multipart/form-data" class="upload-form">
-        <input type="file" name="dicom_file" accept=".dcm,application/dicom" required>
-        <button type="submit">Run Single-Slice</button>
-      </form>
-    </section>
-
-    <section class="mode-panel hidden" data-panel="dicom-archive" role="tabpanel">
-      <h3 class="mode-title">Upload Full DICOM (Archive)</h3>
-      <p class="muted-note">Upload arsip DICOM CT (<code>.zip/.rar/.tar.gz/.7z</code>, dll). Halaman hasil menampilkan viewer overlay 2D per-slice (tanpa 3D).</p>
-      <form action="{{ url_for('predict') }}" method="post" enctype="multipart/form-data" class="upload-form">
-        <input type="file" name="dicom_archive" accept=".zip,.rar,.tar,.gz,.tgz,.bz2,.xz,.7z" required>
-        <button type="submit">Run Inference</button>
-      </form>
-    </section>
-  </div>
-
-  <noscript>
-    <p class="muted-note">JavaScript nonaktif. Semua mode upload tetap bisa dipakai, tapi panel tidak bisa disembunyikan/ditampilkan otomatis.</p>
-  </noscript>
+  <h2>Unggah Arsip DICOM CT</h2>
+  <p>Pipeline ini memproses <strong>hanya series DICOM CT</strong> (computed tomography). Format arsip: zip, rar, tar, tar.gz, tgz, 7z, dan sejenisnya. Struktur mengikuti contoh <code>0019983/CT/*.dcm</code>. Jika satu arsip berisi beberapa modalitas, series <strong>CT</strong> dipilih otomatis (tag DICOM Modality atau folder bernama <code>CT</code>).</p>
+  <form action="{{ url_for('predict') }}" method="post" enctype="multipart/form-data" class="upload-form">
+    <input type="file" name="dicom_archive" accept=".zip,.rar,.tar,.gz,.tgz,.bz2,.xz,.7z" required>
+    <button type="submit">Run Inference & Visualize</button>
+  </form>
 </section>
-
-<script src="{{ url_for('static', filename='js/upload_mode.js') }}"></script>
 {% endblock %}

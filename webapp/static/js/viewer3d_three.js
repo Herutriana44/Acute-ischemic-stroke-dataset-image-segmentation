@@ -180,8 +180,8 @@ function materialFor(colorHex, opacity, flat) {
 }
 
 const result = safeJsonFromScript("mesh-data");
-const ctHost = document.getElementById("viewer3d-vtk-ct");
-const segHost = document.getElementById("viewer3d-vtk-seg");
+const ctHost = document.getElementById("viewer3d-three-ct");
+const segHost = document.getElementById("viewer3d-three-seg");
 
 if (!result || !ctHost || !segHost) {
   // silently exit (template might not include the compare layout)

@@ -288,13 +288,31 @@ export function initUnifiedBrainViewer() {
 
   const lesionGeom = result.lesion_mesh ? buildGeometry(result.lesion_mesh) : null;
 
-  const brainMaterial = createBrainMaterial();
-  const lesionMaterial = createLesionMaterial();
+  if (!lesionGeom) {
+    host.appendChild(el('p', 'Tidak ada lesi yang terdeteksi.', 'muted-note'));
+    return;
+  }
+
+  // Transform lesion from DICOM physical coordinates (mm) to match GLTF brain model.
+  // DICOM origin is at the corner of the volume, while GLTF is centered at origin.
+  // Step 1: Compute lesion bounding box and center.
+  lesionGeom.computeBoundingBox();
+  const box = lesionGeom.boundingBox;
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+
+  // Step 2: Center the lesion at origin (translate by -center).
+  lesionGeom.translate(-center.x, -center.y, -center.z);
+
+  // Step 3: Scale from mm to meters (GLTF models typically use meter units).
+  // Also apply a slight additional scale so the lesion fits well within the brain model.
+  const mmToMeter = 0.001;
+  const fitScale = 0.85; // scale factor to fit lesion within brain model
+  const finalScale = mmToMeter * fitScale;
+  lesionGeom.scale(finalScale, finalScale, finalScale);
 
   const brainMeshes = [];
-  if (lesionGeom) {
-    brainMeshes.push({ geometry: lesionGeom, material: lesionMaterial });
-  }
+  brainMeshes.push({ geometry: lesionGeom, material: createLesionMaterial() });
 
   const destroy = mountThreeViewer(
     host,

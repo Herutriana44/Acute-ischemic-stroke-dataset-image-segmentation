@@ -1,6 +1,5 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js";
-import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/controls/OrbitControls.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 function el(tag, text, className) {
   const n = document.createElement(tag);
@@ -94,7 +93,7 @@ function sizeRenderer(renderer, container) {
   renderer.setSize(w, h, false);
 }
 
-function mountThreeViewer(container, meshes, options, gltfUrl = null) {
+function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransform = null) {
   if (!container) return null;
   container.innerHTML = "";
 
@@ -128,7 +127,11 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null) {
 
   for (const m of meshes) {
     if (!m?.geometry) continue;
-    group.add(new THREE.Mesh(m.geometry, m.material));
+    const mesh = new THREE.Mesh(m.geometry, m.material);
+    if (meshTransform) {
+      mesh.applyMatrix4(meshTransform);
+    }
+    group.add(mesh);
   }
 
   // Load GLTF Model

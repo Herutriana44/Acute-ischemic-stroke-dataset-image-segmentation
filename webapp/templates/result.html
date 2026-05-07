@@ -1,15 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Hasil Inference{% endblock %}
 {% block content %}
-<script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
-      "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/controls/OrbitControls.js"
-    }
-  }
-</script>
+{# Import map removed: Three.js and VTK.js now use direct CDN imports for Firefox compatibility. #}
 <section class="card">
   <h2>Hasil Inference</h2>
   <div class="metrics-grid">

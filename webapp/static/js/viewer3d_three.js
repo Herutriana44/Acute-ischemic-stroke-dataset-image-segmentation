@@ -1,5 +1,7 @@
-import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+// Use absolute CDN imports for maximum browser compatibility (avoids import map issues in Firefox).
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/loaders/GLTFLoader.js";
 
 function el(tag, text, className) {
   const n = document.createElement(tag);
@@ -93,8 +95,22 @@ function sizeRenderer(renderer, container) {
   renderer.setSize(w, h, false);
 }
 
+function isWebGLSupported() {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(window.WebGLRenderingContext && (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")));
+  } catch (e) {
+    return false;
+  }
+}
+
 function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransform = null) {
   if (!container) return null;
+  if (!isWebGLSupported()) {
+    container.innerHTML = "";
+    container.appendChild(el("p", "Browser Anda tidak mendukung WebGL. Gunakan browser modern (Chrome, Edge, Safari) untuk melihat visualisasi 3D.", "muted-note"));
+    return null;
+  }
   container.innerHTML = "";
 
   const wrap = el("div", "", "three-wrap");

@@ -11,6 +11,15 @@ import vtkVolumeMapper from "https://cdn.jsdelivr.net/npm/@kitware/vtk.js@28.12.
 
 const VTK_MAX = 192;
 
+function isWebGLSupported() {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(window.WebGLRenderingContext && (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")));
+  } catch (e) {
+    return false;
+  }
+}
+
 function el(tag, text, className) {
   const n = document.createElement(tag);
   if (text) n.textContent = text;
@@ -247,6 +256,16 @@ const vtkContainerLegacy = document.getElementById("viewer3d-vtk");
 const vtkCt = document.getElementById("viewer3d-vtk-ct");
 const vtkSeg = document.getElementById("viewer3d-vtk-seg");
 if (payload && (vtkContainerLegacy || (vtkCt && vtkSeg))) {
+  if (!isWebGLSupported()) {
+    const msg = "Browser Anda tidak mendukung WebGL. Gunakan browser modern (Chrome, Edge, Safari) untuk melihat visualisasi 3D.";
+    [vtkContainerLegacy, vtkCt, vtkSeg].forEach((c) => {
+      if (c) {
+        c.innerHTML = "";
+        c.appendChild(el("p", msg, "muted-note"));
+      }
+    });
+    return;
+  }
   try {
     const result = JSON.parse(payload.textContent || "{}");
     const runId = result && result.run_id;

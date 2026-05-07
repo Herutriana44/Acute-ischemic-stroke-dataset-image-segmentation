@@ -1,0 +1,431 @@
+{
+  "info": {
+    "name": "Acute Ischemic Stroke - DICOM Segmentation API",
+    "description": "REST API for Acute Ischemic Stroke dataset image segmentation using U-Net. Supports DICOM series and single image prediction with 3D visualization outputs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "description": "Base URL of the Flask webapp"
+    },
+    {
+      "key": "run_id",
+      "value": "",
+      "description": "Run ID from prediction response"
+    }
+  ],
+  "item": [
+    {
+      "name": "DICOM Series Prediction",
+      "item": [
+        {
+          "name": "Predict DICOM Series (Full)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.run_id) {",
+                  "    pm.collectionVariables.set('run_id', jsonData.run_id);",
+                  "}",
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has run_id', function() {",
+                  "    pm.expect(jsonData).to.have.property('run_id');",
+                  "});",
+                  "pm.test('Response has lesion data', function() {",
+                  "    pm.expect(jsonData).to.have.property('lesion_voxels');",
+                  "    pm.expect(jsonData).to.have.property('lesion_volume_ml');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "dicom_archive",
+                  "type": "file",
+                  "src": "",
+                  "description": "ZIP file containing DICOM series (CT scans)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/predict/dicom",
+              "host": ["{{base_url}}"],
+              "path": ["api", "predict", "dicom"]
+            },
+            "description": "Upload a ZIP archive containing DICOM series for full 3D stroke segmentation prediction. Returns all prediction results including NIfTI files, mesh data, and lesion volume measurements."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": []
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/predict/dicom",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "predict", "dicom"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"run_id\": \"abc123def456\",\n  \"dicom_dir\": \"/path/to/dicom\",\n  \"slices\": 128,\n  \"shape_hw\": [512, 512],\n  \"spacing\": [0.5, 0.5, 1.0],\n  \"lesion_voxels\": 5432,\n  \"lesion_volume_mm3\": 1358.0,\n  \"lesion_volume_ml\": 1.358,\n  \"enable_3d\": true,\n  \"files\": {\n    \"ct_nii\": \"http://localhost:5000/runs/abc123def456/ct_window_u8.nii.gz\",\n    \"ct_hu_nii\": \"http://localhost:5000/runs/abc123def456/ct_hu.nii.gz\",\n    \"mask_nii\": \"http://localhost:5000/runs/abc123def456/mask_pred.nii.gz\",\n    \"ct_view_nii\": \"http://localhost:5000/runs/abc123def456/ct_view_u8_hwz.nii.gz\",\n    \"mask_view_nii\": \"http://localhost:5000/runs/abc123def456/mask_view_hwz.nii.gz\",\n    \"dicom_series_zip\": \"http://localhost:5000/runs/abc123def456/dicom_series.zip\",\n    \"mesh_ply_colored\": \"http://localhost:5000/runs/abc123def456/mesh_ct_lesion_colored.ply\",\n    \"mesh_3d_colored_zip\": \"http://localhost:5000/runs/abc123def456/mesh_3d_colored.zip\",\n    \"overlay_slices_dir\": \"http://localhost:5000/runs/abc123def456/overlay_slices\"\n  },\n  \"meshes\": {\n    \"hu_mesh\": {\n      \"x\": [0.0, 1.0],\n      \"y\": [0.0, 0.0],\n      \"z\": [0.0, 0.0],\n      \"i\": [0],\n      \"j\": [1],\n      \"k\": [2]\n    },\n    \"lesion_mesh\": null\n  },\n  \"dicom_manifest_url\": \"http://localhost:5000/runs/abc123def456/dicom_manifest\",\n  \"vtk_meta_url\": \"http://localhost:5000/runs/abc123def456/vtk_meta\"\n}"
+            },
+            {
+              "name": "Error Response - No File",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"error\": \"No dicom_archive file provided\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Single Image Prediction",
+      "item": [
+        {
+          "name": "Predict Single Image",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.run_id) {",
+                  "    pm.collectionVariables.set('run_id', jsonData.run_id);",
+                  "}",
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has run_id', function() {",
+                  "    pm.expect(jsonData).to.have.property('run_id');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image_file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Image file (jpg, jpeg, png, bmp, tif, tiff, webp)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/predict/image",
+              "host": ["{{base_url}}"],
+              "path": ["api", "predict", "image"]
+            },
+            "description": "Upload a single image file for 2D stroke segmentation prediction. Returns prediction result with mask and overlay image URLs."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"run_id\": \"def789ghi012\",\n  \"input_name\": \"ct_scan.png\",\n  \"shape_hw\": [512, 512],\n  \"lesion_pixels\": 1234,\n  \"enable_3d\": false,\n  \"files\": {\n    \"original_png\": \"http://localhost:5000/runs/def789ghi012/input.png\",\n    \"mask_png\": \"http://localhost:5000/runs/def789ghi012/mask_pred.png\",\n    \"overlay_png\": \"http://localhost:5000/runs/def789ghi012/overlay.png\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Runs Management",
+      "item": [
+        {
+          "name": "List All Runs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has runs array', function() {",
+                  "    pm.expect(jsonData).to.have.property('runs');",
+                  "    pm.expect(jsonData.runs).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/runs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "runs"]
+            },
+            "description": "Get a list of all prediction runs with their result summaries and download URLs."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"count\": 2,\n  \"runs\": [\n    {\n      \"run_id\": \"abc123def456\",\n      \"slices\": 128,\n      \"lesion_volume_ml\": 1.358,\n      \"files\": {...}\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Run Result",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has run_id', function() {",
+                  "    pm.expect(jsonData).to.have.property('run_id');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/runs/{{run_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "runs", "{{run_id}}"]
+            },
+            "description": "Get full prediction result for a specific run ID. Returns all prediction outputs including file URLs, mesh data, and volume measurements."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"run_id\": \"abc123def456\",\n  \"dicom_dir\": \"/path/to/dicom\",\n  \"slices\": 128,\n  \"shape_hw\": [512, 512],\n  \"spacing\": [0.5, 0.5, 1.0],\n  \"lesion_voxels\": 5432,\n  \"lesion_volume_mm3\": 1358.0,\n  \"lesion_volume_ml\": 1.358,\n  \"enable_3d\": true,\n  \"files\": {...},\n  \"meshes\": {...},\n  \"dicom_manifest_url\": \"http://localhost:5000/runs/abc123def456/dicom_manifest\",\n  \"vtk_meta_url\": \"http://localhost:5000/runs/abc123def456/vtk_meta\"\n}"
+            },
+            {
+              "name": "Error - Run Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"error\": \"Run not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3D Visualization APIs",
+      "item": [
+        {
+          "name": "Get DICOM Manifest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/dicom_manifest",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "dicom_manifest"]
+            },
+            "description": "Get JSON list of DICOM file URLs for Papaya viewer. Returns ordered slice filenames for proper 3D visualization."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"run_id\": \"abc123def456\",\n  \"count\": 128,\n  \"dicom_urls\": [\n    \"/runs/abc123def456/dicom_series/slice001.dcm\",\n    \"/runs/abc123def456/dicom_series/slice002.dcm\"\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get VTK Metadata",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/vtk_meta?max=192",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "vtk_meta"],
+              "query": [
+                {
+                  "key": "max",
+                  "value": "192",
+                  "description": "Maximum dimension for downsampling"
+                }
+              ]
+            },
+            "description": "Get metadata for vtk.js 3D viewer: dimensions (X,Y,Z), physical spacing in mm, and stride for downsampled volumes."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"run_id\": \"abc123def456\",\n  \"dims_xyz\": [512, 512, 128],\n  \"spacing_xyz_mm\": [0.5, 0.5, 1.0],\n  \"stride\": 1,\n  \"hu_dtype\": \"float32\",\n  \"mask_dtype\": \"uint8\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get HU Volume (Binary)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/vtk_hu.bin?max=192",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "vtk_hu.bin"],
+              "query": [
+                {
+                  "key": "max",
+                  "value": "192"
+                }
+              ]
+            },
+            "description": "Download HU (Hounsfield Units) volume as binary float32 array for vtk.js 3D rendering."
+          }
+        },
+        {
+          "name": "Get Mask Volume (Binary)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/vtk_mask.bin?max=192",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "vtk_mask.bin"],
+              "query": [
+                {
+                  "key": "max",
+                  "value": "192"
+                }
+              ]
+            },
+            "description": "Download prediction mask volume as binary uint8 array for vtk.js 3D rendering."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Result File Downloads",
+      "item": [
+        {
+          "name": "Download CT NIfTI (Windowed)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/ct_window_u8.nii.gz",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "ct_window_u8.nii.gz"]
+            },
+            "description": "Download windowed CT volume as NIfTI file (uint8, window level 40/80)."
+          }
+        },
+        {
+          "name": "Download CT NIfTI (HU)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/ct_hu.nii.gz",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "ct_hu.nii.gz"]
+            },
+            "description": "Download CT volume in Hounsfield Units as NIfTI file (float32)."
+          }
+        },
+        {
+          "name": "Download Mask NIfTI",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/mask_pred.nii.gz",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "mask_pred.nii.gz"]
+            },
+            "description": "Download prediction mask as NIfTI file (uint8 binary mask)."
+          }
+        },
+        {
+          "name": "Download Colored PLY Mesh",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/mesh_ct_lesion_colored.ply",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "mesh_ct_lesion_colored.ply"]
+            },
+            "description": "Download colored PLY mesh file containing CT surface (blue-gray) and lesion mask (orange) for 3D visualization."
+          }
+        },
+        {
+          "name": "Download OBJ Mesh ZIP",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/mesh_3d_colored.zip",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "mesh_3d_colored.zip"]
+            },
+            "description": "Download ZIP file containing OBJ+MTL files for colored 3D mesh visualization."
+          }
+        },
+        {
+          "name": "Download DICOM Series ZIP",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/dicom_series.zip",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "dicom_series.zip"]
+            },
+            "description": "Download the original DICOM series as a ZIP archive."
+          }
+        },
+        {
+          "name": "View Overlay Slice PNG",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/runs/{{run_id}}/overlay_slices/0000.png",
+              "host": ["{{base_url}}"],
+              "path": ["runs", "{{run_id}}", "overlay_slices", "0000.png"]
+            },
+            "description": "View individual overlay PNG slice (CT + lesion overlay in red). Slice index ranges from 0000 to N-1."
+          }
+        }
+      ]
+    }
+  ]
+}

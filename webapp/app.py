@@ -337,6 +337,157 @@ def create_app() -> Flask:
                     continue
         return render_template("runs_list.html", runs=runs)
 
+    # ------------------------------------------------------------------
+    # REST API endpoints
+    # ------------------------------------------------------------------
+
+    def _build_api_result(run_dir: Path, data: dict) -> dict:
+        """Enrich result dict with download URLs for API consumers."""
+        run_id = run_dir.name
+        base = request.host_url.rstrip("/")
+
+        def _url(filename: str) -> str:
+            if not filename:
+                return None
+            return f"{base}/runs/{run_id}/{filename}"
+
+        api_result = {
+            "run_id": run_id,
+            "dicom_dir": data.get("dicom_dir"),
+            "slices": data.get("slices"),
+            "shape_hw": data.get("shape_hw"),
+            "spacing": data.get("spacing"),
+            "lesion_voxels": data.get("lesion_voxels"),
+            "lesion_volume_mm3": data.get("lesion_volume_mm3"),
+            "lesion_volume_ml": data.get("lesion_volume_ml"),
+            "enable_3d": data.get("enable_3d", False),
+            "files": {
+                "ct_nii": _url(data.get("ct_nii")),
+                "ct_hu_nii": _url(data.get("ct_hu_nii")),
+                "mask_nii": _url(data.get("mask_nii")),
+                "ct_view_nii": _url(data.get("ct_view_nii")),
+                "mask_view_nii": _url(data.get("mask_view_nii")),
+                "dicom_series_zip": _url(data.get("dicom_series_zip")),
+                "mesh_ply_colored": _url(data.get("mesh_ply_colored")),
+                "mesh_3d_colored_zip": _url(data.get("mesh_3d_colored_zip")),
+                "overlay_slices_dir": _url(data.get("overlay_slices_dir")),
+            },
+            "meshes": {
+                "hu_mesh": data.get("hu_mesh"),
+                "lesion_mesh": data.get("lesion_mesh"),
+            },
+            "dicom_manifest_url": f"{base}/runs/{run_id}/dicom_manifest",
+            "vtk_meta_url": f"{base}/runs/{run_id}/vtk_meta",
+        }
+        return api_result
+
+    @app.route("/api/predict/dicom", methods=["POST"])
+    def api_predict_dicom():
+        """REST API: upload DICOM zip archive, run full series prediction, return JSON."""
+        archive_file = request.files.get("dicom_archive")
+        if archive_file is None or archive_file.filename == "":
+            return jsonify({"error": "No dicom_archive file provided"}), 400
+
+        try:
+            extracted_dir, run_id = extract_archive(archive_file, app.config["UPLOAD_DIR"])
+            series_dir = find_dicom_series_dir(extracted_dir)
+            result = run_inference(
+                dicom_dir=series_dir,
+                run_id=run_id,
+                model_path=app.config["MODEL_PATH"],
+                runs_dir=app.config["RUNS_DIR"],
+            )
+        except InferenceError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": f"Failed to process data: {exc}"}), 500
+
+        run_dir = app.config["RUNS_DIR"] / run_id
+        return jsonify(_build_api_result(run_dir, result))
+
+    @app.route("/api/predict/image", methods=["POST"])
+    def api_predict_image():
+        """REST API: upload single image, run prediction, return JSON."""
+        image_file = request.files.get("image_file")
+        if image_file is None or image_file.filename == "":
+            return jsonify({"error": "No image_file provided"}), 400
+
+        allowed = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+        name = (image_file.filename or "").strip()
+        suffix = Path(name).suffix.lower()
+        if suffix not in allowed:
+            return jsonify({"error": f"Unsupported format: {suffix}"}), 400
+
+        run_id = _new_run_id()
+        out_dir: Path = app.config["RUNS_DIR"] / run_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        image_path = out_dir / f"input{suffix}"
+        try:
+            image_file.save(str(image_path))
+            result = run_inference_image(
+                image_path=image_path,
+                run_id=run_id,
+                model_path=app.config["MODEL_PATH"],
+                runs_dir=app.config["RUNS_DIR"],
+            )
+        except InferenceError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": f"Failed to process image: {exc}"}), 500
+
+        base = request.host_url.rstrip("/")
+        api_result = {
+            "run_id": run_id,
+            "input_name": result.get("input_name"),
+            "shape_hw": result.get("shape_hw"),
+            "lesion_pixels": result.get("lesion_pixels"),
+            "enable_3d": False,
+            "files": {
+                "original_png": f"{base}/runs/{run_id}/{result.get('original_png')}" if result.get("original_png") else None,
+                "mask_png": f"{base}/runs/{run_id}/{result.get('mask_png')}" if result.get("mask_png") else None,
+                "overlay_png": f"{base}/runs/{run_id}/{result.get('overlay_png')}" if result.get("overlay_png") else None,
+            },
+        }
+        return jsonify(api_result)
+
+    @app.route("/api/runs", methods=["GET"])
+    def api_list_runs():
+        """REST API: list all prediction runs with result summaries."""
+        runs_dir: Path = app.config["RUNS_DIR"]
+        runs = []
+        if runs_dir.exists() and runs_dir.is_dir():
+            for run_dir in sorted(runs_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+                if not run_dir.is_dir():
+                    continue
+                result_file = run_dir / "result.json"
+                if not result_file.is_file():
+                    continue
+                try:
+                    data = json.loads(result_file.read_text(encoding="utf-8"))
+                    api_result = _build_api_result(run_dir, data)
+                    runs.append(api_result)
+                except (json.JSONDecodeError, OSError):
+                    continue
+        return jsonify({"count": len(runs), "runs": runs})
+
+    @app.route("/api/runs/<run_id>", methods=["GET"])
+    def api_view_run(run_id: str):
+        """REST API: get full prediction result for a specific run."""
+        safe_run_id = "".join([c for c in run_id if c.isalnum() or c in ("-", "_")])
+        if safe_run_id != run_id:
+            return jsonify({"error": "Invalid run_id"}), 404
+        run_dir = (app.config["RUNS_DIR"] / run_id).resolve()
+        if app.config["RUNS_DIR"].resolve() not in run_dir.parents:
+            return jsonify({"error": "Run not found"}), 404
+        result_file = run_dir / "result.json"
+        if not result_file.is_file():
+            return jsonify({"error": "Run result not found"}), 404
+        try:
+            data = json.loads(result_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return jsonify({"error": "Failed to read result"}), 500
+        return jsonify(_build_api_result(run_dir, data))
+
     @app.route("/runs/<run_id>", methods=["GET"])
     def view_run(run_id: str):
         """Re-open a previous prediction result."""

@@ -1,5 +1,6 @@
-import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/loaders/GLTFLoader.js";
 
 function el(tag, text, className) {
   const n = document.createElement(tag);
@@ -93,7 +94,7 @@ function sizeRenderer(renderer, container) {
   renderer.setSize(w, h, false);
 }
 
-function mountThreeViewer(container, meshes, options) {
+function mountThreeViewer(container, meshes, options, gltfUrl = null) {
   if (!container) return null;
   container.innerHTML = "";
 
@@ -128,6 +129,15 @@ function mountThreeViewer(container, meshes, options) {
   for (const m of meshes) {
     if (!m?.geometry) continue;
     group.add(new THREE.Mesh(m.geometry, m.material));
+  }
+
+  // Load GLTF Model
+  if (gltfUrl) {
+    const loader = new GLTFLoader();
+    loader.load(gltfUrl, (gltf) => {
+      group.add(gltf.scene);
+      fitCameraToObject(camera, controls, group, options?.fitOffset ?? 1.35);
+    });
   }
 
   // Optional subtle axes/grid (disabled by default)
@@ -195,6 +205,15 @@ if (!result || !ctHost || !segHost) {
     ctHost.appendChild(el("p", "Tidak ada mesh yang dapat divisualisasikan (hu_mesh / lesion_mesh kosong).", "muted-note"));
     segHost.appendChild(el("p", "Tidak ada mesh yang dapat divisualisasikan (hu_mesh / lesion_mesh kosong).", "muted-note"));
   } else {
+    // New: Brain model + segmentation overlay
+    const brainHost = document.getElementById("viewer3d-brain");
+    if (brainHost) {
+      const brainMeshes = [];
+      if (lesionGeom) brainMeshes.push({ geometry: lesionGeom, material: materialFor("#ea580c", 0.88, true) });
+      mountThreeViewer(brainHost, brainMeshes, { fitOffset: 1.3 }, "/static/models/Plastinated_Human_Brain.gltf");
+      brainHost.appendChild(el("p", "Three.js: Brain model (GLTF) dengan overlay lesi.", "muted-note"));
+    }
+
     // Left: CT surface (volume impression)
     if (huGeom) {
       mountThreeViewer(

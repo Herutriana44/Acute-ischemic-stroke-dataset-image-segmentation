@@ -71,6 +71,14 @@ def _marching_surface(
     mesh_spacing: tuple[float, float, float],
     level: float,
 ) -> tuple[np.ndarray, np.ndarray] | None:
+    # GLTF bounds: X:[-12.02, 9.87], Y:[-26.26, -3.65], Z:[-24.20, 0.80]
+    # Center: [-1.075, -14.955, -11.7]
+    # Extents: [21.89, 22.61, 25.0]
+    brain_min = np.array([-12.02, -26.26, -24.20])
+    brain_max = np.array([9.87, -3.65, 0.80])
+    brain_center = (brain_min + brain_max) / 2.0
+    brain_size = brain_max - brain_min
+
     if np.nanmax(volume) <= level:
         return None
     verts, faces, _, _ = marching_cubes(
@@ -80,8 +88,15 @@ def _marching_surface(
     )
     if len(verts) == 0 or len(faces) == 0:
         return None
-    # Sama dengan sumbu Plotly mesh3d: x←axis2, y←axis1, z←axis0
-    xyz = np.column_stack([verts[:, 2], verts[:, 1], verts[:, 0]]).astype(np.float64)
+
+    # Transform to GLTF space: center lesion, then scale to brain size
+    xyz_raw = np.column_stack([verts[:, 2], verts[:, 1], verts[:, 0]]).astype(np.float64)
+    c_min, c_max = xyz_raw.min(axis=0), xyz_raw.max(axis=0)
+    c_center = (c_min + c_max) / 2.0
+    c_size = np.maximum(c_max - c_min, 1e-6)
+
+    # Normalize lesion to [-0.5, 0.5] then map to brain space
+    xyz = ((xyz_raw - c_center) / c_size) * brain_size + brain_center
     return xyz, faces.astype(np.int64)
 
 

@@ -62,7 +62,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pyqt6 pyqt6-dev-tools libgl1-mesa-glx libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinput0 libxkbcommon0 libglib2.0-0
+          sudo apt-get install -y \
+            libgl1 libglu1-mesa libegl1 \
+            libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-sync1 \
+            libxcb-xfixes0 libxcb-xinput0 libxkbcommon0 \
+            libglib2.0-0 libxcb-xkb1 libxcb-shm0 libdbus-1-3 \
+            libx11-6 libxext6 libxfixes3 libxi6 libxrender1
 
       - name: Install Python dependencies
         run: |

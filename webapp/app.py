@@ -270,6 +270,29 @@ def create_app() -> Flask:
         resp.headers["X-Content-Type-Options"] = "nosniff"
         return resp
 
+    brain_model_dir = root_dir.parent / "3D_model" / "Plastinated_Human_Brain"
+
+    @app.route("/brain-model/<path:filename>", methods=["GET"])
+    def brain_model_file(filename: str):
+        safe_name = os.path.basename(filename)
+        if safe_name != filename or not safe_name:
+            abort(404)
+        lower = safe_name.lower()
+        send_kw: dict = dict(as_attachment=False, conditional=True, max_age=0)
+        if lower.endswith(".gltf"):
+            send_kw["mimetype"] = "model/gltf+json"
+        elif lower.endswith(".bin"):
+            send_kw["mimetype"] = "application/octet-stream"
+        elif lower.endswith(".jpg") or lower.endswith(".jpeg"):
+            send_kw["mimetype"] = "image/jpeg"
+        elif lower.endswith(".png"):
+            send_kw["mimetype"] = "image/png"
+        resp = send_from_directory(str(brain_model_dir), safe_name, **send_kw)
+        resp = make_response(resp)
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        return resp
+
     @app.route("/predict", methods=["POST"])
     def predict():
         archive_file = request.files.get("dicom_archive")

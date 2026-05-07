@@ -204,6 +204,32 @@ function materialFor(colorHex, opacity, flat) {
   });
 }
 
+function createBrainMaterial() {
+  return new THREE.MeshPhongMaterial({
+    color: new THREE.Color('#d4a574'),
+    shininess: 30,
+    specular: new THREE.Color(0x444444),
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    flatShading: false,
+  });
+}
+
+function createLesionMaterial() {
+  return new THREE.MeshPhongMaterial({
+    color: new THREE.Color('#ea580c'),
+    shininess: 18,
+    specular: new THREE.Color(0x222222),
+    transparent: true,
+    opacity: 0.88,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    flatShading: true,
+  });
+}
+
 export function initThreeJsViewer() {
   const result = safeJsonFromScript('mesh-data');
   const ctHost = document.getElementById('viewer3d-three-ct');
@@ -228,7 +254,7 @@ export function initThreeJsViewer() {
   if (brainHost) {
     const brainMeshes = [];
     if (lesionGeom) brainMeshes.push({ geometry: lesionGeom, material: materialFor('#ea580c', 0.88, true) });
-    mountThreeViewer(brainHost, brainMeshes, { fitOffset: 1.3 }, '/static/models/Plastinated_Human_Brain.gltf');
+    mountThreeViewer(brainHost, brainMeshes, { fitOffset: 1.3 }, '/brain-model/Plastinated_Human_Brain.gltf');
     brainHost.appendChild(el('p', 'Three.js: Brain model (GLTF) dengan overlay lesi.', 'muted-note'));
   }
 
@@ -248,4 +274,36 @@ export function initThreeJsViewer() {
   if (lesionGeom) rightMeshes.push({ geometry: lesionGeom, material: materialFor('#ea580c', 0.88, true) });
   mountThreeViewer(segHost, rightMeshes, { fitOffset: 1.3 });
   segHost.appendChild(el('p', 'Three.js: mask overlay (oranye) di atas CT (transparan).', 'muted-note'));
+}
+
+export function initUnifiedBrainViewer() {
+  const result = safeJsonFromScript('mesh-data');
+  const host = document.getElementById('viewer3d-unified');
+  if (!host) return;
+
+  if (!result) {
+    host.appendChild(el('p', 'Data visualisasi tidak tersedia.', 'muted-note'));
+    return;
+  }
+
+  const lesionGeom = result.lesion_mesh ? buildGeometry(result.lesion_mesh) : null;
+
+  const brainMaterial = createBrainMaterial();
+  const lesionMaterial = createLesionMaterial();
+
+  const brainMeshes = [];
+  if (lesionGeom) {
+    brainMeshes.push({ geometry: lesionGeom, material: lesionMaterial });
+  }
+
+  const destroy = mountThreeViewer(
+    host,
+    brainMeshes,
+    { fitOffset: 1.35, showAxes: false },
+    '/brain-model/Plastinated_Human_Brain.gltf'
+  );
+
+  host.appendChild(el('p', 'Three.js: Brain model (GLTF) dengan overlay lesi (oranye).', 'muted-note'));
+
+  return destroy;
 }

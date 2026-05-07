@@ -16,6 +16,8 @@ from webapp.services.inference_service import InferenceError, run_inference, run
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-key-change-me")
+    # Prevent caching of static files during development
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
     root_dir = Path(__file__).resolve().parent
     uploads_dir = root_dir / "uploads"

@@ -160,7 +160,6 @@ function prepareVtkContainer(container) {
   container.innerHTML = "";
   const wrap = el("div", "", "vtk-wrap");
   wrap.style.width = "100%";
-  // Force a non-zero height for VTK canvas sizing (some layouts return 0px on first paint).
   const h = Math.max(container.clientHeight || 0, 650);
   wrap.style.height = `${h}px`;
   wrap.style.minHeight = "650px";
@@ -194,7 +193,6 @@ async function loadVtkBuffers(metaUrl, huUrl, maskUrl) {
 
 function createGenericRw(container) {
   const genericRw = vtkGenericRenderWindow.newInstance({
-    // Slightly brighter background so "black canvas" is less ambiguous.
     background: [0.16, 0.17, 0.19],
     listenWindowResize: true,
   });
@@ -219,7 +217,6 @@ function summarizeVolumes(huImage, maskImage) {
   const mkRange = maskImage.getPointData().getScalars().getRange();
   const mkVals = maskImage.getPointData().getScalars().getData();
   let mkCount = 0;
-  // sample counting (fast enough for <= 192^3; still ok)
   for (let i = 0; i < mkVals.length; i++) if (mkVals[i] > 0) mkCount++;
   const pct = mkVals.length ? (100 * mkCount) / mkVals.length : 0;
   return `HU range: ${huRange[0].toFixed(1)}..${huRange[1].toFixed(1)} | mask: ${mkCount} vox (${pct.toFixed(2)}%) | mask range: ${mkRange[0]}..${mkRange[1]}`;
@@ -230,7 +227,7 @@ async function startVtkDicomViewer(opts) {
   if (!container) return;
 
   container.innerHTML = "";
-  const status = el("p", "Memuat volume DICOM + mask untuk VTK…", "vtk-status muted-note");
+  const status = el("p", "Memuat volume DICOM + mask untuk VTK...", "vtk-status muted-note");
   container.appendChild(status);
 
   try {
@@ -243,19 +240,20 @@ async function startVtkDicomViewer(opts) {
   } catch (e) {
     console.error("[VTK viewer]", e);
     container.innerHTML = "";
-    const msg =
-      e && e.message
-        ? `Gagal memuat visualisasi VTK: ${e.message}`
-        : "Gagal memuat visualisasi VTK. Pastikan inferensi telah menghasilkan hu_volume.npy dan mask_pred.npy.";
+    const msg = e && e.message
+      ? `Gagal memuat visualisasi VTK: ${e.message}`
+      : "Gagal memuat visualisasi VTK. Pastikan inferensi telah menghasilkan hu_volume.npy dan mask_pred.npy.";
     container.appendChild(el("p", msg, "muted-note"));
   }
 }
 
-const payload = document.getElementById("mesh-data");
-const vtkContainerLegacy = document.getElementById("viewer3d-vtk");
-const vtkCt = document.getElementById("viewer3d-vtk-ct");
-const vtkSeg = document.getElementById("viewer3d-vtk-seg");
-if (payload && (vtkContainerLegacy || (vtkCt && vtkSeg))) {
+function initVtkViewer() {
+  const payload = document.getElementById("mesh-data");
+  const vtkContainerLegacy = document.getElementById("viewer3d-vtk");
+  const vtkCt = document.getElementById("viewer3d-vtk-ct");
+  const vtkSeg = document.getElementById("viewer3d-vtk-seg");
+  if (!payload || (!vtkContainerLegacy && !(vtkCt && vtkSeg))) return;
+
   if (!isWebGLSupported()) {
     const msg = "Browser Anda tidak mendukung WebGL. Gunakan browser modern (Chrome, Edge, Safari) untuk melihat visualisasi 3D.";
     [vtkContainerLegacy, vtkCt, vtkSeg].forEach((c) => {
@@ -266,6 +264,7 @@ if (payload && (vtkContainerLegacy || (vtkCt && vtkSeg))) {
     });
     return;
   }
+
   try {
     const result = JSON.parse(payload.textContent || "{}");
     const runId = result && result.run_id;
@@ -280,19 +279,15 @@ if (payload && (vtkContainerLegacy || (vtkCt && vtkSeg))) {
       if (vtkCt && vtkSeg) {
         vtkCt.innerHTML = "";
         vtkSeg.innerHTML = "";
-        const note = el("p", "Memuat data VTK (HU + mask)…", "muted-note");
+        const note = el("p", "Memuat data VTK (HU + mask)...", "muted-note");
         note.style.margin = "0 0 10px";
-        // show message once above CT panel (small UX)
         vtkCt.appendChild(note);
         try {
           const { huImage, maskImage } = await loadVtkBuffers(metaUrl, huUrl, maskUrl);
           vtkCt.innerHTML = "";
           vtkSeg.innerHTML = "";
 
-          // Left: CT volume render (no mask)
           renderVolumes(vtkCt, [ctVolumeActor(huImage)]);
-
-          // Right: segmentation with faint CT context + stronger mask
           renderVolumes(vtkSeg, [ctVolumeActorWithOpacityScale(huImage, 0.35), maskVolumeActor(maskImage)]);
 
           const infoCt = el("p", summarizeVolumes(huImage, maskImage), "muted-note");
@@ -314,11 +309,11 @@ if (payload && (vtkContainerLegacy || (vtkCt && vtkSeg))) {
         }
       }
 
-      // fallback: legacy single viewer
       if (vtkContainerLegacy) {
         startVtkDicomViewer({ container: vtkContainerLegacy, metaUrl, huUrl, maskUrl });
       }
     };
+
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", go);
     } else {
@@ -338,3 +333,5 @@ if (payload && (vtkContainerLegacy || (vtkCt && vtkSeg))) {
     }
   }
 }
+
+initVtkViewer();

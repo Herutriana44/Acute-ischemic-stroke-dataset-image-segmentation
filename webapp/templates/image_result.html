@@ -14,21 +14,18 @@
 <section class="card">
   <h2>Overlay (CT/Image + Mask)</h2>
   <p class="muted-note">Mode ini hanya menampilkan hasil 2D (tanpa visualisasi 3D).</p>
-  <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
+  <div class="img-grid">
     <div>
       <div class="muted-note"><strong>Original</strong></div>
-      <img alt="original" style="max-width:420px; width:100%; height:auto; border-radius:12px;"
-           src="{{ url_for('runs_file', run_id=result.run_id, filename=result.original_png) }}">
+      <img alt="original" class="responsive-img" src="{{ url_for('runs_file', run_id=result.run_id, filename=result.original_png) }}">
     </div>
     <div>
       <div class="muted-note"><strong>Mask</strong></div>
-      <img alt="mask" style="max-width:420px; width:100%; height:auto; border-radius:12px;"
-           src="{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_png) }}">
+      <img alt="mask" class="responsive-img" src="{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_png) }}">
     </div>
     <div>
       <div class="muted-note"><strong>Overlay</strong></div>
-      <img alt="overlay" style="max-width:420px; width:100%; height:auto; border-radius:12px;"
-           src="{{ url_for('runs_file', run_id=result.run_id, filename=result.overlay_png) }}">
+      <img alt="overlay" class="responsive-img" src="{{ url_for('runs_file', run_id=result.run_id, filename=result.overlay_png) }}">
     </div>
   </div>
 </section>

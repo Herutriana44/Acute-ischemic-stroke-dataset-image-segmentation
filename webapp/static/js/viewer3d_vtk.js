@@ -334,4 +334,5 @@ function initVtkViewer() {
   }
 }
 
-initVtkViewer();
+// Lazy init: only run when called or when section is expanded.
+window.initVtkViewer = initVtkViewer;

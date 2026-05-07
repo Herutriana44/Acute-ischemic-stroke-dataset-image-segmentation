@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Saved Predictions{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Saved Predictions</h2>
+  <p class="muted-note">All prediction results are saved. Click any run to view its result again.</p>
+  {% if runs %}
+  <div class="runs-grid">
+    {% for r in runs %}
+    <a href="{{ url_for('view_run', run_id=r.run_id) }}" class="run-card">
+      <div class="run-card-header">
+        <strong class="run-id">{{ r.run_id[:8] }}...</strong>
+        <span class="run-type">{{ '3D DICOM' if r.enable_3d else '2D Image' }}</span>
+      </div>
+      <div class="run-card-body">
+        <div class="run-metric"><span>Lesion</span><span>{{ r.lesion_voxels if r.enable_3d else r.lesion_pixels }} vox</span></div>
+        <div class="run-metric"><span>Volume</span><span>{{ '%.2f mL'|format(r.lesion_volume_ml) if r.enable_3d else '2D' }}</span></div>
+        <div class="run-metric"><span>Size</span><span>{{ r.shape_hw[0] }}x{{ r.shape_hw[1] }}</span></div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted-note">No saved predictions yet. <a href="{{ url_for('index') }}" class="download-link">Upload data</a> to get started.</p>
+  {% endif %}
+</section>
+<section class="card">
+  <a href="{{ url_for('index') }}" class="button-link">Upload New Data</a>
+</section>
+{% endblock %}

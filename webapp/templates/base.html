@@ -2,15 +2,21 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>{% block title %}AIS DICOM Segmentation{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
   <header class="site-header">
-    <div class="container">
-      <h1>AIS DICOM Segmentation Web</h1>
-      <p>Unggah arsip DICOM pemindaian <strong>CT</strong>, jalankan inference, dan lihat visualisasi 3D.</p>
+    <div class="container header-flex">
+      <div class="header-left">
+        <h1>AIS DICOM Segmentation Web</h1>
+        <p>Unggah arsip DICOM pemindaian <strong>CT</strong>, jalankan inference, dan lihat visualisasi 3D.</p>
+      </div>
+      <nav class="header-nav">
+        <a href="{{ url_for('index') }}" class="nav-link">Upload</a>
+        <a href="{{ url_for('list_runs') }}" class="nav-link">Saved Runs</a>
+      </nav>
     </div>
   </header>
   <main class="container">

@@ -35,27 +35,36 @@
   </ul>
 </section>
 
+{% macro collapsible(title, id, help_text=None) %}
+<section class="card collapsible-section" id="section-{{ id }}">
+  <div class="collapsible-header" data-target="content-{{ id }}">
+    <h2>{{ title }}</h2>
+    <span class="collapse-icon">&#9660;</span>
+  </div>
+  <div class="collapsible-content" id="content-{{ id }}">
+    {{ caller() }}
+  </div>
+</section>
+{% endmacro %}
+
 {% if result.enable_3d %}
-<section class="card">
-  <h2>Visualisasi 3D (DICOM + Mask)</h2>
+{% call collapsible("Visualisasi 3D (DICOM + Mask)", "dicom-3d") %}
   <p>Objek abu-abu: kontur volume CT. Objek merah: area prediksi lesi.</p>
   <div id="viewer3d" class="viewer"></div>
-</section>
+{% endcall %}
 {% endif %}
 
-<section class="card">
-  <h2>Visualisasi (Orthogonal Viewer)</h2>
+{% call collapsible("Visualisasi (Orthogonal Viewer)", "papaya") %}
   <p><strong>CT + mask (NIfTI)</strong> memakai pasangan <code>{{ result.ct_view_nii }}</code> + <code>{{ result.mask_view_nii }}</code> (susunan H×W×Z, affine sejajar) agar Papaya menampilkan overlay dengan stabil. Mode <strong>DICOM + mask</strong> tidak diubah: tetap <code>.dcm</code> + <code>{{ result.mask_nii }}</code>.</p>
   <div class="papaya-toolbar" role="group" aria-label="Mode Papaya">
     <button type="button" class="papaya-mode active" id="papaya-btn-nifti" data-mode="nifti">CT + mask (NIfTI, disarankan)</button>
     <button type="button" class="papaya-mode" id="papaya-btn-dicom" data-mode="dicom">DICOM + mask</button>
   </div>
   <div class="papaya-wrap" id="papaya-host"></div>
-</section>
+{% endcall %}
 
 {% if result.enable_3d %}
-<section class="card">
-  <h2>Visualisasi 3D — VTK.js (Volume Render)</h2>
+{% call collapsible("Visualisasi 3D — VTK.js (Volume Render)", "vtk") %}
   <p>Tampilan dipisah dua panel: <strong>CT volume render</strong> vs <strong>CT + mask overlay</strong>. Ini membaca <code>hu_volume.npy</code> + <code>mask_pred.npy</code> dari hasil inferensi (di-stream sebagai binary).</p>
   <div class="vtk-compare">
     <div class="vtk-panel">
@@ -67,10 +76,9 @@
       <div id="viewer3d-vtk-seg" class="viewer viewer-surface"></div>
     </div>
   </div>
-</section>
+{% endcall %}
 
-<section class="card">
-  <h2>Visualisasi 3D — Three.js (Mesh Compare)</h2>
+{% call collapsible("Visualisasi 3D — Three.js (Mesh Compare)", "threejs-mesh") %}
   <p>Tampilan dipisah dua panel: <strong>CT surface (mesh)</strong> vs <strong>CT surface + lesi (mesh)</strong>. Viewer memakai mesh marching-cubes (<code>hu_mesh</code> / <code>lesion_mesh</code>) yang tersimpan di <code>result.json</code>.</p>
   {% if result.mesh_ply_colored or result.mesh_3d_colored_zip %}
   <p class="muted-note">Unduh model permukaan (mesh marching cubes): {% if result.mesh_ply_colored %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download>PLY gabungan</a>{% endif %}{% if result.mesh_ply_colored and result.mesh_3d_colored_zip %} · {% endif %}{% if result.mesh_3d_colored_zip %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download>ZIP (OBJ+MTL)</a>{% endif %}.</p>
@@ -85,13 +93,12 @@
       <div id="viewer3d-three-seg" class="viewer viewer-surface"></div>
     </div>
   </div>
-</section>
+{% endcall %}
 
-<section class="card">
-  <h2>Visualisasi 3D — Brain Model + Lesion (Unified)</h2>
+{% call collapsible("Visualisasi 3D — Brain Model + Lesion (Unified)", "brain-unified") %}
   <p>Menampilkan model 3D otak (GLTF) dengan overlay lesi (oranye) dalam satu visualisasi terpadu. Drag untuk rotate, scroll untuk zoom.</p>
   <div id="viewer3d-unified" class="viewer viewer-surface"></div>
-</section>
+{% endcall %}
 {% endif %}
 
 <section class="card">
@@ -109,135 +116,139 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
 <script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
 <script type="text/javascript">
+  // Collapsible sections
   (function () {
-    var host = document.getElementById("papaya-host");
-    var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
-    var maskUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}";
-    var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
-    var ctViewUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii) }}";
-    var maskViewUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}";
-
-    function absUrl(u) {
-      try {
-        return new URL(u, window.location.href).href;
-      } catch (e) {
-        return u;
-      }
-    }
-    console.info("[Papaya / inference URLs]", {
-      manifestUrl: absUrl(manifestUrl),
-      maskUrl: absUrl(maskUrl),
-      ctUrl: absUrl(ctUrl),
-      ctViewUrl: absUrl(ctViewUrl),
-      maskViewUrl: absUrl(maskViewUrl),
+    var sections = document.querySelectorAll(".collapsible-header");
+    sections.forEach(function (header) {
+      header.addEventListener("click", function () {
+        var targetId = this.getAttribute("data-target");
+        var content = document.getElementById(targetId);
+        var section = this.parentElement;
+        if (!content) return;
+        section.classList.toggle("open");
+      });
     });
+  })();
 
-    // LUT hangat (bukan grayscale); min/max untuk mask biner 0/1.
-    var maskDisplay = {
-      min: 0,
-      max: 1,
-      alpha: 0.68,
-      lut: "Overlay (Positives)",
-    };
+  // Papaya viewer (lazy init on section expand)
+  (function () {
+    var papayaSection = document.getElementById("section-papaya");
+    var papayaInitialized = false;
 
-    var dicomUrlsCache = [];
+    function initPapaya() {
+      if (papayaInitialized) return;
+      papayaInitialized = true;
 
-    function mountAndStart(params) {
-      window.papayaParams = params;
-      if (!host) return;
-      host.innerHTML = '<div class="papaya" data-params="papayaParams"></div>';
-      function kick() {
-        if (window.papaya && window.papaya.Container && typeof window.papaya.Container.startPapaya === "function") {
-          window.papaya.Container.startPapaya();
+      var host = document.getElementById("papaya-host");
+      var manifestUrl = "{{ url_for('dicom_manifest', run_id=result.run_id) }}";
+      var maskUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_nii) }}";
+      var ctUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_nii) }}";
+      var ctViewUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.ct_view_nii) }}";
+      var maskViewUrl = "{{ url_for('runs_file', run_id=result.run_id, filename=result.mask_view_nii) }}";
+
+      function absUrl(u) {
+        try { return new URL(u, window.location.href).href; } catch (e) { return u; }
+      }
+
+      var maskDisplay = { min: 0, max: 1, alpha: 0.68, lut: "Overlay (Positives)" };
+      var dicomUrlsCache = [];
+
+      function mountAndStart(params) {
+        window.papayaParams = params;
+        if (!host) return;
+        host.innerHTML = '<div class="papaya" data-params="papayaParams"></div>';
+        function kick() {
+          if (window.papaya && window.papaya.Container && typeof window.papaya.Container.startPapaya === "function") {
+            window.papaya.Container.startPapaya();
+          }
         }
+        setTimeout(kick, 100);
       }
-      setTimeout(kick, 0);
-    }
 
-    function baseParams() {
-      var params = [];
-      params["worldSpace"] = true;
-      params["showOrientation"] = true;
-      params["showRuler"] = true;
-      params["smoothDisplay"] = false;
-      params["interpolation"] = "none";
-      return params;
-    }
-
-    function paramsDicomPlusMask(dicomUrls) {
-      var params = baseParams();
-      params["images"] = [dicomUrls, maskUrl];
-      params[maskUrl] = maskDisplay;
-      return params;
-    }
-
-    function paramsNiftiPair() {
-      var params = [];
-      // Pasangan HWZ + affine diagonal: lebih cocok dengan pembaca NIfTI Papaya daripada (Z,H,W) + affine DICOM penuh.
-      params["worldSpace"] = false;
-      params["showOrientation"] = true;
-      params["showRuler"] = true;
-      params["smoothDisplay"] = false;
-      params["interpolation"] = "none";
-      params["images"] = [ctViewUrl, maskViewUrl];
-      params[ctViewUrl] = { min: 0, max: 255 };
-      // Hindari LUT seperti Fire/Spectrum (ujung putih). "Overlay (Positives)" = merah → kuning.
-      params[maskViewUrl] = {
-        min: 0.5,
-        max: 255,
-        alpha: 0.68,
-        lut: "Overlay (Positives)",
-      };
-      return params;
-    }
-
-    function setMode(mode) {
-      var niftiBtn = document.getElementById("papaya-btn-nifti");
-      var dicomBtn = document.getElementById("papaya-btn-dicom");
-      if (niftiBtn) niftiBtn.classList.toggle("active", mode === "nifti");
-      if (dicomBtn) dicomBtn.classList.toggle("active", mode === "dicom");
-
-      if (mode === "nifti") {
-        mountAndStart(paramsNiftiPair());
-        return;
+      function baseParams() {
+        var params = [];
+        params["worldSpace"] = true;
+        params["showOrientation"] = true;
+        params["showRuler"] = true;
+        params["smoothDisplay"] = false;
+        params["interpolation"] = "none";
+        return params;
       }
-      if (!dicomUrlsCache.length) {
-        console.warn("Papaya: tidak ada URL DICOM; tetap pakai NIfTI.");
-        mountAndStart(paramsNiftiPair());
-        if (niftiBtn) niftiBtn.classList.add("active");
-        if (dicomBtn) dicomBtn.classList.remove("active");
-        return;
-      }
-      mountAndStart(paramsDicomPlusMask(dicomUrlsCache));
-    }
 
-    function start() {
-      var niftiBtn = document.getElementById("papaya-btn-nifti");
-      var dicomBtn = document.getElementById("papaya-btn-dicom");
-      if (niftiBtn) niftiBtn.addEventListener("click", function () { setMode("nifti"); });
-      if (dicomBtn) dicomBtn.addEventListener("click", function () { setMode("dicom"); });
+      function paramsDicomPlusMask(dicomUrls) {
+        var params = baseParams();
+        params["images"] = [dicomUrls, maskUrl];
+        params[maskUrl] = maskDisplay;
+        return params;
+      }
+
+      function paramsNiftiPair() {
+        var params = [];
+        params["worldSpace"] = false;
+        params["showOrientation"] = true;
+        params["showRuler"] = true;
+        params["smoothDisplay"] = false;
+        params["interpolation"] = "none";
+        params["images"] = [ctViewUrl, maskViewUrl];
+        params[ctViewUrl] = { min: 0, max: 255 };
+        params[maskViewUrl] = { min: 0.5, max: 255, alpha: 0.68, lut: "Overlay (Positives)" };
+        return params;
+      }
+
+      function setMode(mode) {
+        var niftiBtn = document.getElementById("papaya-btn-nifti");
+        var dicomBtn = document.getElementById("papaya-btn-dicom");
+        if (niftiBtn) niftiBtn.classList.toggle("active", mode === "nifti");
+        if (dicomBtn) dicomBtn.classList.toggle("active", mode === "dicom");
+        if (mode === "nifti") { mountAndStart(paramsNiftiPair()); return; }
+        if (!dicomUrlsCache.length) {
+          mountAndStart(paramsNiftiPair());
+          return;
+        }
+        mountAndStart(paramsDicomPlusMask(dicomUrlsCache));
+      }
 
       fetch(manifestUrl, { cache: "no-store" })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           dicomUrlsCache = (data && data.dicom_urls) ? data.dicom_urls : [];
-          if (!dicomUrlsCache.length) {
-            console.warn("Papaya: manifest DICOM kosong; hanya mode NIfTI.");
-          }
           setMode("nifti");
         })
-        .catch(function (e) {
-          console.error("Papaya: gagal memuat manifest.", e);
-          dicomUrlsCache = [];
-          setMode("nifti");
-        });
+        .catch(function () { setMode("nifti"); });
     }
 
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", start);
-    } else {
-      start();
+    if (papayaSection) {
+      var header = papayaSection.querySelector(".collapsible-header");
+      if (header) {
+        header.addEventListener("click", function () {
+          setTimeout(initPapaya, 200);
+        });
+      }
     }
+
+    // VTK viewer lazy init
+    var vtkSection = document.getElementById("section-vtk");
+    if (vtkSection) {
+      var vtkHeader = vtkSection.querySelector(".collapsible-header");
+      if (vtkHeader) {
+        vtkHeader.addEventListener("click", function () {
+          setTimeout(function() {
+            if (!window._vtkInit && window.initVtkViewer) {
+              window._vtkInit = true;
+              window.initVtkViewer();
+            }
+          }, 200);
+        });
+      }
+    }
+
+    // Auto-expand first section (VTK) on load
+    setTimeout(function() {
+      if (vtkSection && !vtkSection.classList.contains("open")) {
+        var vtkHeader = vtkSection.querySelector(".collapsible-header");
+        if (vtkHeader) vtkHeader.click();
+      }
+    }, 100);
   })();
 </script>
 {% endblock %}

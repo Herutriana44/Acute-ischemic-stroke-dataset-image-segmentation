@@ -316,6 +316,47 @@ def create_app() -> Flask:
 
         return render_template("result.html", result=result)
 
+    @app.route("/runs", methods=["GET"])
+    def list_runs():
+        """List all saved prediction runs."""
+        runs_dir: Path = app.config["RUNS_DIR"]
+        runs = []
+        if runs_dir.exists() and runs_dir.is_dir():
+            for run_dir in sorted(runs_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+                if not run_dir.is_dir():
+                    continue
+                result_file = run_dir / "result.json"
+                if not result_file.is_file():
+                    continue
+                try:
+                    data = json.loads(result_file.read_text(encoding="utf-8"))
+                    data["run_id"] = run_dir.name
+                    data["created"] = result_file.stat().st_mtime
+                    runs.append(data)
+                except (json.JSONDecodeError, OSError):
+                    continue
+        return render_template("runs_list.html", runs=runs)
+
+    @app.route("/runs/<run_id>", methods=["GET"])
+    def view_run(run_id: str):
+        """Re-open a previous prediction result."""
+        safe_run_id = "".join([c for c in run_id if c.isalnum() or c in ("-", "_")])
+        if safe_run_id != run_id:
+            abort(404)
+        run_dir = (app.config["RUNS_DIR"] / run_id).resolve()
+        if app.config["RUNS_DIR"].resolve() not in run_dir.parents:
+            abort(404)
+        result_file = run_dir / "result.json"
+        if not result_file.is_file():
+            abort(404)
+        try:
+            result = json.loads(result_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            abort(404)
+        if result.get("shape_hw", (0, 0)) == (0, 0) and not result.get("enable_3d", False):
+            return render_template("image_result.html", result=result)
+        return render_template("result.html", result=result)
+
     return app
 
 

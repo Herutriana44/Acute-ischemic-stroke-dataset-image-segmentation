@@ -1,0 +1,19 @@
+# PyQt6 desktop app
+PyQt6>=6.5.0
+PyQt6-WebEngine>=6.5.0
+
+# Inference backend (same as webapp)
+numpy>=1.24.0
+Pillow>=10.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+segmentation-models-pytorch>=0.3.3
+albumentations>=1.4.0
+pydicom>=2.4.4
+nibabel>=5.2.1
+scikit-image>=0.22.0
+matplotlib>=3.8.0
+patool>=2.0.0
+
+# Build
+pyinstaller>=6.0.0

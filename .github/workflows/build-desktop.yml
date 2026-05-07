@@ -1,0 +1,84 @@
+name: Build Desktop App (.exe)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "desktopapp/**"
+      - "webapp/**"
+      - "unet_segmentation/**"
+      - "infer_dicom_unet.py"
+      - "requirements.txt"
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows .exe
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r desktopapp/requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          cd desktopapp
+          pyinstaller build.spec --clean --noconfirm
+        shell: bash
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stroke-segmentation-desktop-win64
+          path: desktopapp/dist/AcuteStrokeSegmentation/
+          retention-days: 30
+
+  build-linux:
+    name: Build Linux binary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pyqt6 pyqt6-dev-tools libgl1-mesa-glx libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinput0 libxkbcommon0 libglib2.0-0
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r desktopapp/requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          cd desktopapp
+          pyinstaller build.spec --clean --noconfirm
+        shell: bash
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stroke-segmentation-desktop-linux
+          path: desktopapp/dist/AcuteStrokeSegmentation/
+          retention-days: 30

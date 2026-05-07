@@ -12,3 +12,7 @@ __pycache__/
 
 clean_dataset/
 dataset/
+
+# Frontend
+webapp/frontend/node_modules/
+webapp/static/dist/

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item *)",
+      "PowerShell(cmd.exe /c \"cd webapp\\\\frontend && npm install\" 2>&1)",
+      "PowerShell(cmd.exe /c \"cd /d C:\\\\Users\\\\User\\\\Documents\\\\Acute-ischemic-stroke-dataset-image-segmentation\\\\webapp\\\\frontend && npm install\")",
+      "PowerShell(cmd.exe /c \"cd /d C:\\\\Users\\\\User\\\\Documents\\\\Acute-ischemic-stroke-dataset-image-segmentation\\\\webapp\\\\frontend && npm run build\")"
+    ]
+  }
+}

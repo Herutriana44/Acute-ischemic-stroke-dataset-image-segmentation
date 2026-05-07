@@ -1,0 +1,1 @@
+3d brain model udah bisa tampil, tapi otak dan lesi terlalu jauh jarak nya

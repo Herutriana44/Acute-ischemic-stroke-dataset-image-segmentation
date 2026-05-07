@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Hasil Inference{% endblock %}
 {% block content %}
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+      "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/controls/OrbitControls.js"
+    }
+  }
+</script>
 <section class="card">
   <h2>Hasil Inference</h2>
   <div class="metrics-grid">
@@ -54,19 +63,34 @@
 
 {% if result.enable_3d %}
 <section class="card">
-  <h2>Visualisasi 3D — Three.js (Volume Render vs Segmentation)</h2>
-  <p>Tampilan dipisah dua panel: <strong>Volume Render (CT surface)</strong> vs <strong>Segmentation (mask)</strong>. Viewer memakai mesh hasil marching-cubes dari pipeline inferensi (lebih kompatibel untuk ngrok/browser).</p>
+  <h2>Visualisasi 3D — VTK.js (Volume Render)</h2>
+  <p>Tampilan dipisah dua panel: <strong>CT volume render</strong> vs <strong>CT + mask overlay</strong>. Ini membaca <code>hu_volume.npy</code> + <code>mask_pred.npy</code> dari hasil inferensi (di-stream sebagai binary).</p>
+  <div class="vtk-compare">
+    <div class="vtk-panel">
+      <div class="vtk-panel-title">CT VOLUME</div>
+      <div id="viewer3d-vtk-ct" class="viewer viewer-surface"></div>
+    </div>
+    <div class="vtk-panel">
+      <div class="vtk-panel-title">CT + MASK</div>
+      <div id="viewer3d-vtk-seg" class="viewer viewer-surface"></div>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Visualisasi 3D — Three.js (Mesh Compare)</h2>
+  <p>Tampilan dipisah dua panel: <strong>CT surface (mesh)</strong> vs <strong>CT surface + lesi (mesh)</strong>. Viewer memakai mesh marching-cubes (<code>hu_mesh</code> / <code>lesion_mesh</code>) yang tersimpan di <code>result.json</code>.</p>
   {% if result.mesh_ply_colored or result.mesh_3d_colored_zip %}
   <p class="muted-note">Unduh model permukaan (mesh marching cubes): {% if result.mesh_ply_colored %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download>PLY gabungan</a>{% endif %}{% if result.mesh_ply_colored and result.mesh_3d_colored_zip %} · {% endif %}{% if result.mesh_3d_colored_zip %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download>ZIP (OBJ+MTL)</a>{% endif %}.</p>
   {% endif %}
   <div class="vtk-compare">
     <div class="vtk-panel">
-      <div class="vtk-panel-title">VOLUME RENDER</div>
-      <div id="viewer3d-vtk-ct" class="viewer viewer-surface"></div>
+      <div class="vtk-panel-title">CT SURFACE (MESH)</div>
+      <div id="viewer3d-three-ct" class="viewer viewer-surface"></div>
     </div>
     <div class="vtk-panel">
-      <div class="vtk-panel-title">SEGMENTATION</div>
-      <div id="viewer3d-vtk-seg" class="viewer viewer-surface"></div>
+      <div class="vtk-panel-title">CT + LESI (MESH)</div>
+      <div id="viewer3d-three-seg" class="viewer viewer-surface"></div>
     </div>
     <div class="vtk-panel">
       <div class="vtk-panel-title">BRAIN MODEL + LESION</div>
@@ -85,6 +109,7 @@
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="{{ url_for('static', filename='js/viewer.js') }}"></script>
 {% if result.enable_3d %}
+<script type="module" src="{{ url_for('static', filename='js/viewer3d_vtk.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='js/viewer3d_three.js') }}"></script>
 {% endif %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">

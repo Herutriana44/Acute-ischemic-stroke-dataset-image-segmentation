@@ -136,47 +136,55 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransf
   const root = new THREE.Group();
   scene.add(root);
 
-  const group = new THREE.Group();
-  root.add(group);
+  // Separate groups for proper render order:
+  // brainGroup renders first (lower renderOrder), lesionGroup renders on top (higher renderOrder)
+  const brainGroup = new THREE.Group();
+  root.add(brainGroup);
+
+  const lesionGroup = new THREE.Group();
+  root.add(lesionGroup);
 
   for (const m of meshes) {
     if (!m?.geometry) continue;
     const mesh = new THREE.Mesh(m.geometry, m.material);
+    mesh.renderOrder = 1; // Lesion renders on top
     if (meshTransform) {
       mesh.applyMatrix4(meshTransform);
     }
-    group.add(mesh);
+    lesionGroup.add(mesh);
   }
 
   if (gltfUrl) {
     const loader = new GLTFLoader();
     const makeTransparent = options?.transparentGltf ?? false;
     loader.load(gltfUrl, (gltf) => {
-      if (makeTransparent) {
-        gltf.scene.traverse((child) => {
-          if (child.isMesh && child.material) {
+      gltf.scene.traverse((child) => {
+        if (child.isMesh) {
+          child.renderOrder = 0; // Brain renders first
+          if (makeTransparent && child.material) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach((mat) => {
               mat.transparent = true;
               mat.opacity = 0.45;
               mat.depthWrite = false;
+              mat.depthTest = true;
             });
           }
-        });
-      }
-      group.add(gltf.scene);
-      fitCameraToObject(camera, controls, group, options?.fitOffset ?? 1.35);
+        }
+      });
+      brainGroup.add(gltf.scene);
+      fitCameraToObject(camera, controls, root, options?.fitOffset ?? 1.35);
     });
   }
 
   if (options?.showAxes) {
-    group.add(new THREE.AxesHelper(50));
+    lesionGroup.add(new THREE.AxesHelper(50));
   }
 
   sizeRenderer(renderer, wrap);
   camera.aspect = (renderer.domElement.width || 1) / (renderer.domElement.height || 1);
   camera.updateProjectionMatrix();
-  fitCameraToObject(camera, controls, group, options?.fitOffset ?? 1.35);
+  fitCameraToObject(camera, controls, root, options?.fitOffset ?? 1.35);
 
   const ro = new ResizeObserver(() => {
     sizeRenderer(renderer, wrap);

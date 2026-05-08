@@ -9,6 +9,7 @@ on:
       - "unet_segmentation/**"
       - "infer_dicom_unet.py"
       - "requirements.txt"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 jobs:

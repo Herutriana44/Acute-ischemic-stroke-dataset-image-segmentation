@@ -3,13 +3,6 @@ name: Build Desktop App (.exe)
 on:
   push:
     branches: [main]
-    paths:
-      - "desktopapp/**"
-      - "webapp/**"
-      - "unet_segmentation/**"
-      - "infer_dicom_unet.py"
-      - "requirements.txt"
-      - ".github/workflows/**"
   workflow_dispatch:
 
 jobs:

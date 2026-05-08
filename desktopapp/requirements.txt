@@ -15,5 +15,8 @@ scikit-image>=0.22.0
 matplotlib>=3.8.0
 patool>=2.0.0
 
+# Web framework utilities (needed for FileStorage in inference)
+werkzeug>=3.0.0
+
 # Build
 pyinstaller>=6.0.0

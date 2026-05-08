@@ -6,7 +6,8 @@
       "PowerShell(cmd.exe /c \"cd /d C:\\\\Users\\\\User\\\\Documents\\\\Acute-ischemic-stroke-dataset-image-segmentation\\\\webapp\\\\frontend && npm install\")",
       "PowerShell(cmd.exe /c \"cd /d C:\\\\Users\\\\User\\\\Documents\\\\Acute-ischemic-stroke-dataset-image-segmentation\\\\webapp\\\\frontend && npm run build\")",
       "PowerShell(cmd /c \"cd /d C:\\\\Users\\\\User\\\\Documents\\\\Acute-ischemic-stroke-dataset-image-segmentation\\\\webapp\\\\frontend && npm run build 2>&1\")",
-      "PowerShell(cmd /c \"cd /d C:\\\\Users\\\\User\\\\Documents\\\\Acute-ischemic-stroke-dataset-image-segmentation\\\\webapp\\\\frontend && dir node_modules 2>&1 | head -20\")"
+      "PowerShell(cmd /c \"cd /d C:\\\\Users\\\\User\\\\Documents\\\\Acute-ischemic-stroke-dataset-image-segmentation\\\\webapp\\\\frontend && dir node_modules 2>&1 | head -20\")",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\User\\\\Documents\\\\Acute-ischemic-stroke-dataset-image-segmentation\\\\webapp\\\\frontend\\\\src\\\\viewer3d.js\" | Select-Object -Index 205-225 | ForEach-Object { $i=205; $input | ForEach-Object { Write-Output \"$i`: $_\"; $i++ } })"
     ]
   }
 }

@@ -24,9 +24,9 @@ def main() -> None:
     app.setApplicationName("Acute Ischemic Stroke — Segmentation")
     app.setOrganizationName("MedicalAI")
 
-    # Enable HiDPI scaling
-    app.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
-    app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+    # Enable HiDPI pixmaps (scaling is auto-enabled in PyQt6)
+    if hasattr(Qt.ApplicationAttribute, 'AA_UseHighDpiPixmaps'):
+        app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
 
     window = MainWindow()
     window.show()

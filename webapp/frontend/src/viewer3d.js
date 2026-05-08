@@ -150,7 +150,20 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransf
 
   if (gltfUrl) {
     const loader = new GLTFLoader();
+    const makeTransparent = options?.transparentGltf ?? false;
     loader.load(gltfUrl, (gltf) => {
+      if (makeTransparent) {
+        gltf.scene.traverse((child) => {
+          if (child.isMesh && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((mat) => {
+              mat.transparent = true;
+              mat.opacity = 0.45;
+              mat.depthWrite = false;
+            });
+          }
+        });
+      }
       group.add(gltf.scene);
       fitCameraToObject(camera, controls, group, options?.fitOffset ?? 1.35);
     });
@@ -317,7 +330,7 @@ export function initUnifiedBrainViewer() {
   const destroy = mountThreeViewer(
     host,
     brainMeshes,
-    { fitOffset: 1.35, showAxes: false },
+    { fitOffset: 1.35, showAxes: false, transparentGltf: true },
     '/brain-model/Plastinated_Human_Brain.gltf'
   );
 

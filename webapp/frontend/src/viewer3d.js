@@ -320,7 +320,7 @@ export function initUnifiedBrainViewer() {
 
   // Position: slight offset to keep it adjacent to the brain model
   const lesionMesh = new THREE.Mesh(lesionGeom, createLesionMaterial());
-  lesionMesh.position.x = 0.0032; 
+  lesionMesh.position.x = 0.00032; 
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setClearColor(0x14161a, 1.0);
@@ -328,6 +328,10 @@ export function initUnifiedBrainViewer() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50000);
   const controls = new OrbitControls(camera, renderer.domElement);
+
+  // Add grid for coordinate reference
+  const grid = new THREE.GridHelper(2, 20, 0x888888, 0x444444);
+  scene.add(grid);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x000000, 1));
   scene.add(lesionMesh);

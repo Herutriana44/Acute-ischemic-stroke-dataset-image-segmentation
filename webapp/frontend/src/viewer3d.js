@@ -302,35 +302,62 @@ export function initUnifiedBrainViewer() {
     return;
   }
 
-  // Transform lesion from DICOM physical coordinates (mm) to match GLTF brain model.
-  // DICOM origin is at the corner of the volume, while GLTF is centered at origin.
-  // Step 1: Compute lesion bounding box and center.
+  // --- POSITIONING LOGIC ---
+  // To keep models separate, we will place them side-by-side.
+  // We don't modify the meshes in-place for the GLTF loader directly,
+  // but we will add the lesion to the scene as a separate mesh.
+
+  // 1. Lesion setup: Center it at origin, then offset it to the right.
   lesionGeom.computeBoundingBox();
   const box = lesionGeom.boundingBox;
   const center = new THREE.Vector3();
   box.getCenter(center);
-
-  // Step 2: Center the lesion at origin (translate by -center).
   lesionGeom.translate(-center.x, -center.y, -center.z);
 
-  // Step 3: Scale from mm to meters (GLTF models typically use meter units).
-  // Also apply a slight additional scale so the lesion fits well within the brain model.
   const mmToMeter = 0.001;
   const fitScale = 0.85;
   const finalScale = mmToMeter * fitScale;
   lesionGeom.scale(finalScale, finalScale, finalScale);
 
+  // Position: move lesion to the right (X = 0.2 meters)
+  const lesionMesh = new THREE.Mesh(lesionGeom, createLesionMaterial());
+  lesionMesh.position.x = 0.2;
+
+  // 2. Brain model setup: Loaded via GLTFLoader in mountThreeViewer.
+  // We pass a callback to mountThreeViewer to add the lesion mesh once the brain loads.
+
   const brainMeshes = [];
-  brainMeshes.push({ geometry: lesionGeom, material: createLesionMaterial() });
+  // mountThreeViewer handles GLTF loading. To handle separate objects,
+  // we pass the lesion mesh into the scene via a modified approach.
 
-  const destroy = mountThreeViewer(
-    host,
-    brainMeshes,
-    { fitOffset: 1.35, showAxes: false, transparentGltf: true },
-    '/brain-model/Plastinated_Human_Brain.gltf'
-  );
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setClearColor(0x14161a, 1.0);
+  host.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50000);
+  const controls = new OrbitControls(camera, renderer.domElement);
 
-  host.appendChild(el('p', 'Three.js: Brain model (GLTF) dengan overlay lesi (oranye).', 'muted-note'));
+  // Add light
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x000000, 1));
 
-  return destroy;
+  // Add Lesion
+  scene.add(lesionMesh);
+
+  // Add Brain
+  const loader = new GLTFLoader();
+  loader.load('/brain-model/Plastinated_Human_Brain.gltf', (gltf) => {
+    // Position: move brain to the left (X = -0.2 meters)
+    gltf.scene.position.x = -0.2;
+    scene.add(gltf.scene);
+  });
+
+  camera.position.z = 1;
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  host.appendChild(el('p', 'Three.js: Brain model (kiri) dan lesi (kanan).', 'muted-note'));
 }

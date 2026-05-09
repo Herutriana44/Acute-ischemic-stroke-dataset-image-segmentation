@@ -3,49 +3,107 @@ import * as THREE from 'three';
 // UI controls for editing position and rotation of meshes
 function addTransformControls(container, meshes) {
   const ui = el('div', '', 'transform-controls');
+
+  // overlay absolute position
   ui.style.position = 'absolute';
-  ui.style.top = '0';
-  ui.style.left = '0';
-  ui.style.padding = '5px';
-  ui.style.background = 'rgba(0,0,0,0.5)';
+  ui.style.top = '10px';
+  ui.style.left = '10px';
+
+  // appearance
+  ui.style.padding = '10px';
+  ui.style.background = 'rgba(0,0,0,0.7)';
   ui.style.color = 'white';
-  ui.style.zIndex = '10';
-  // Title for the control panel
+  ui.style.zIndex = '1000';
+
+  // IMPORTANT
+  ui.style.pointerEvents = 'auto';
+
+  // size
+  ui.style.width = '220px';
+  ui.style.borderRadius = '8px';
+  ui.style.fontSize = '12px';
+
+  // prevent layout push
+  ui.style.display = 'block';
+
+  // Title
   const title = el('div', 'Kontrol Transformasi');
   title.style.fontWeight = 'bold';
-  title.style.marginBottom = '4px';
+  title.style.marginBottom = '8px';
+  title.style.fontSize = '14px';
+
   ui.appendChild(title);
+
   const createSlider = (label, min, max, step, initial, onInput) => {
     const wrapper = el('div', '');
+
+    wrapper.style.marginBottom = '6px';
+
     const lbl = el('label', label);
+
+    lbl.style.display = 'block';
+    lbl.style.marginBottom = '2px';
+
     const inp = document.createElement('input');
+
     inp.type = 'range';
     inp.min = min;
     inp.max = max;
     inp.step = step;
     inp.value = initial;
+
+    inp.style.width = '100%';
+
     inp.oninput = () => onInput(parseFloat(inp.value));
+
     wrapper.appendChild(lbl);
     wrapper.appendChild(inp);
+
     ui.appendChild(wrapper);
   };
+
   const pos = new THREE.Vector3();
   const rot = new THREE.Euler();
+
   const apply = () => {
     for (const mesh of meshes) {
       mesh.position.copy(pos);
       mesh.rotation.copy(rot);
     }
   };
-  createSlider('Pos X', -100, 100, 0.1, 0, v => { pos.x = v; apply(); });
-  createSlider('Pos Y', -100, 100, 0.1, 0, v => { pos.y = v; apply(); });
-  createSlider('Pos Z', -100, 100, 0.1, 0, v => { pos.z = v; apply(); });
-  createSlider('Rot X', -3.14, 3.14, 0.01, 0, v => { rot.x = v; apply(); });
-  createSlider('Rot Y', -3.14, 3.14, 0.01, 0, v => { rot.y = v; apply(); });
-  createSlider('Rot Z', -3.14, 3.14, 0.01, 0, v => { rot.z = v; apply(); });
+
+  createSlider('Pos X', -100, 100, 0.1, 0, v => {
+    pos.x = v;
+    apply();
+  });
+
+  createSlider('Pos Y', -100, 100, 0.1, 0, v => {
+    pos.y = v;
+    apply();
+  });
+
+  createSlider('Pos Z', -100, 100, 0.1, 0, v => {
+    pos.z = v;
+    apply();
+  });
+
+  createSlider('Rot X', -3.14, 3.14, 0.01, 0, v => {
+    rot.x = v;
+    apply();
+  });
+
+  createSlider('Rot Y', -3.14, 3.14, 0.01, 0, v => {
+    rot.y = v;
+    apply();
+  });
+
+  createSlider('Rot Z', -3.14, 3.14, 0.01, 0, v => {
+    rot.z = v;
+    apply();
+  });
+
   container.appendChild(ui);
 }
-
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -192,7 +250,7 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransf
     meshObjs.push(mesh);
   }
   // Add UI controls for editing position and rotation of all meshes
-  addTransformControls(container, meshObjs);
+  addTransformControls(wrap, meshObjs);
 
   if (gltfUrl) {
     const loader = new GLTFLoader();
@@ -392,26 +450,82 @@ export function initUnifiedBrainViewer() {
   scene.add(lesionMesh);
 
   const coordDisplay = el('div', '', 'coord-display');
-  coordDisplay.style.marginTop = '10px';
-  coordDisplay.style.fontFamily = 'monospace';
-  coordDisplay.style.fontSize = '12px';
-  host.appendChild(coordDisplay);
+
+coordDisplay.style.position = 'absolute';
+coordDisplay.style.top = '10px';
+coordDisplay.style.left = '10px';
+
+coordDisplay.style.zIndex = '9999';
+
+coordDisplay.style.background = 'rgba(0,0,0,0.82)';
+coordDisplay.style.color = 'white';
+
+coordDisplay.style.padding = '12px';
+coordDisplay.style.borderRadius = '10px';
+
+coordDisplay.style.fontFamily = 'monospace';
+coordDisplay.style.fontSize = '12px';
+
+coordDisplay.style.width = '340px';
+
+coordDisplay.style.maxHeight = '90vh';
+coordDisplay.style.overflowY = 'auto';
+
+coordDisplay.style.pointerEvents = 'auto';
+
+host.appendChild(coordDisplay);
 
   function updateCoordDisplay(brain, lesion) {
-    coordDisplay.innerHTML = `
-      <div><strong>Otak:</strong> Pos(X:${brain.position.x.toFixed(1)}, Y:${brain.position.y.toFixed(1)}, Z:${brain.position.z.toFixed(1)}) 
-      Rot(X:${(brain.rotation.x * 180 / Math.PI).toFixed(0)}°, Y:${(brain.rotation.y * 180 / Math.PI).toFixed(0)}°, Z:${(brain.rotation.z * 180 / Math.PI).toFixed(0)}°)</div>
-      <div><strong>Lesi:</strong> Pos(X:${lesion.position.x.toFixed(1)}, Y:${lesion.position.y.toFixed(1)}, Z:${lesion.position.z.toFixed(1)}) 
-      Rot(X:${(lesion.rotation.x * 180 / Math.PI).toFixed(0)}°, Y:${(lesion.rotation.y * 180 / Math.PI).toFixed(0)}°, Z:${(lesion.rotation.z * 180 / Math.PI).toFixed(0)}°)</div>
-    `;
-  }
+  coordDisplay.innerHTML = `
+    <div style="font-size:14px;font-weight:bold;margin-bottom:10px;">
+      Kontrol Transformasi
+    </div>
+
+    <div style="margin-bottom:10px;">
+      <div style="font-weight:bold;color:#7dd3fc;">Otak</div>
+      <div>Pos X : ${brain.position.x.toFixed(1)}</div>
+      <div>Pos Y : ${brain.position.y.toFixed(1)}</div>
+      <div>Pos Z : ${brain.position.z.toFixed(1)}</div>
+
+      <div>Rot X : ${(brain.rotation.x * 180 / Math.PI).toFixed(0)}°</div>
+      <div>Rot Y : ${(brain.rotation.y * 180 / Math.PI).toFixed(0)}°</div>
+      <div>Rot Z : ${(brain.rotation.z * 180 / Math.PI).toFixed(0)}°</div>
+    </div>
+
+    <div>
+      <div style="font-weight:bold;color:#fb923c;">Lesi</div>
+      <div>Pos X : ${lesion.position.x.toFixed(1)}</div>
+      <div>Pos Y : ${lesion.position.y.toFixed(1)}</div>
+      <div>Pos Z : ${lesion.position.z.toFixed(1)}</div>
+
+      <div>Rot X : ${(lesion.rotation.x * 180 / Math.PI).toFixed(0)}°</div>
+      <div>Rot Y : ${(lesion.rotation.y * 180 / Math.PI).toFixed(0)}°</div>
+      <div>Rot Z : ${(lesion.rotation.z * 180 / Math.PI).toFixed(0)}°</div>
+    </div>
+  `;
+}
 
   const loader = new GLTFLoader();
   loader.load('/brain-model/Plastinated_Human_Brain.gltf', (gltf) => {
     const brain = gltf.scene;
     scene.add(brain);
 
-    const gui = new GUI({ container: host, title: 'Kontrol Transformasi' });
+    const gui = new GUI({
+  container: host,
+  title: 'Kontrol Transformasi'
+});
+
+gui.domElement.style.position = 'absolute';
+gui.domElement.style.top = '220px';
+gui.domElement.style.left = '10px';
+
+gui.domElement.style.zIndex = '9999';
+
+gui.domElement.style.maxHeight = '75vh';
+gui.domElement.style.overflowY = 'auto';
+
+gui.domElement.style.pointerEvents = 'auto';
+
     const bFolder = gui.addFolder('Otak');
     bFolder.add(brain.position, 'x', -100, 100).onChange(() => updateCoordDisplay(brain, lesionMesh));
     bFolder.add(brain.position, 'y', -100, 100).onChange(() => updateCoordDisplay(brain, lesionMesh));

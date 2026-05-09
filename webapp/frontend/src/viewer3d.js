@@ -119,42 +119,28 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransf
   container.appendChild(wrap);
 
   const renderer = createRenderer(wrap);
-  renderer.autoClear = false;
-
-  // Two separate scenes for two-pass rendering
-  const brainScene = new THREE.Scene();
-  brainScene.background = new THREE.Color(0x111318);
-
-  const lesionScene = new THREE.Scene();
-  // lesionScene has no background so brain shows through
+  
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x111318);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50000);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
 
-  // Lights for brain scene
   const hemi = new THREE.HemisphereLight(0xdde7ff, 0x14161a, 0.85);
-  brainScene.add(hemi);
+  scene.add(hemi);
   const dir = new THREE.DirectionalLight(0xffffff, 0.9);
   dir.position.set(1, 1, 1);
-  brainScene.add(dir);
+  scene.add(dir);
 
-  // Lights for lesion scene
-  const hemiLesion = new THREE.HemisphereLight(0xdde7ff, 0x14161a, 0.85);
-  lesionScene.add(hemiLesion);
-  const dirLesion = new THREE.DirectionalLight(0xffffff, 0.9);
-  dirLesion.position.set(1, 1, 1);
-  lesionScene.add(dirLesion);
-
-  // Add lesion meshes to lesionScene
   for (const m of meshes) {
     if (!m?.geometry) continue;
     const mesh = new THREE.Mesh(m.geometry, m.material);
     if (meshTransform) {
       mesh.applyMatrix4(meshTransform);
     }
-    lesionScene.add(mesh);
+    scene.add(mesh);
   }
 
   if (gltfUrl) {
@@ -174,33 +160,25 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransf
           }
         });
       }
-      brainScene.add(gltf.scene);
-      // Fit camera to combined scene
-      const combined = new THREE.Group();
-      brainScene.children.forEach((c) => combined.add(c.clone()));
-      lesionScene.children.forEach((c) => combined.add(c.clone()));
-      fitCameraToObject(camera, controls, combined, options?.fitOffset ?? 1.35);
+      scene.add(gltf.scene);
+      fitCameraToObject(camera, controls, scene, options?.fitOffset ?? 1.35);
     });
   }
 
   if (options?.showAxes) {
-    lesionScene.add(new THREE.AxesHelper(50));
+    scene.add(new THREE.AxesHelper(50));
   }
 
   sizeRenderer(renderer, wrap);
   camera.aspect = (renderer.domElement.width || 1) / (renderer.domElement.height || 1);
   camera.updateProjectionMatrix();
-  fitCameraToObject(camera, controls, lesionScene, options?.fitOffset ?? 1.35);
+  fitCameraToObject(camera, controls, scene, options?.fitOffset ?? 1.35);
 
   const ro = new ResizeObserver(() => {
     sizeRenderer(renderer, wrap);
     camera.aspect = (wrap.clientWidth || 1) / (wrap.clientHeight || 1);
     camera.updateProjectionMatrix();
-    // Two-pass render in resize
-    renderer.clear();
-    renderer.render(brainScene, camera);
-    renderer.clearDepth();
-    renderer.render(lesionScene, camera);
+    renderer.render(scene, camera);
   });
   ro.observe(wrap);
 
@@ -208,11 +186,7 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransf
   function animate() {
     if (!alive) return;
     controls.update();
-    // Two-pass render: brain first, then lesion on top
-    renderer.clear();
-    renderer.render(brainScene, camera);
-    renderer.clearDepth();
-    renderer.render(lesionScene, camera);
+    renderer.render(scene, camera);
     requestAnimationFrame(animate);
   }
   requestAnimationFrame(animate);

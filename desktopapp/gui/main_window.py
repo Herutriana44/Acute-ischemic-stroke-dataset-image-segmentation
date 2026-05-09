@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PyQt6.QtWebEngineWidgets import QWebEngineView
+from pyvistaqt import QtInteractor
 
 from gui.workers import InferenceWorker
 
@@ -33,7 +33,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._run_dir: Path | None = None
         self._result: dict | None = None
-        self._temp_dir: Path | None = None
         self._init_ui()
 
     # ------------------------------------------------------------------
@@ -96,8 +95,8 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self._log)
         splitter.addWidget(left)
 
-        # Right: QWebEngineView for 3D visualization
-        self._viewer = QWebEngineView()
+        # Right: PyVista QtInteractor for 3D visualization
+        self._viewer = QtInteractor(self)
         self._viewer.setMinimumSize(QSize(600, 500))
         splitter.addWidget(self._viewer)
         splitter.setStretchFactor(1, 1)
@@ -227,15 +226,24 @@ class MainWindow(QMainWindow):
         self._display_viewer()
 
     def _display_viewer(self) -> None:
-        """Generate HTML and load it into the QWebEngineView."""
-        from viewer.html_viewer import build_result_html
+        """Display results using PyVista."""
+        if not self._run_dir or not self._result:
+            return
 
-        if self._temp_dir:
-            shutil.rmtree(self._temp_dir, ignore_errors=True)
-        self._temp_dir = Path(tempfile.mkdtemp(prefix="stroke_app_"))
-        html_path = build_result_html(self._run_dir, self._result, self._temp_dir)
-        self._viewer.load(QUrl.fromLocalFile(str(html_path)))
-        self._log.append(f"Viewer loaded: {html_path.name}")
+        # Clear existing
+        self._viewer.plotter.clear()
+
+        # Load mesh from backend output if available
+        # The backend typically produces .ply or similar. Check result dict
+        mesh_path = self._run_dir / "lesion_mesh.ply"
+        if mesh_path.exists():
+            import pyvista as pv
+            mesh = pv.read(mesh_path)
+            self._viewer.plotter.add_mesh(mesh, color="red", opacity=0.8)
+
+        self._viewer.plotter.add_axes()
+        self._viewer.plotter.reset_camera()
+        self._log.append("3D viewer updated using PyVista.")
 
     def _save_results(self) -> None:
         if not self._run_dir:
@@ -256,10 +264,8 @@ class MainWindow(QMainWindow):
             "About",
             "Acute Ischemic Stroke — DICOM Segmentation\n\n"
             "Desktop application for CT stroke segmentation using U-Net.\n"
-            "Supports 3D visualization with VTK.js, Papaya, and Three.js.",
+            "Supports 3D visualization with PyVista.",
         )
 
     def closeEvent(self, event) -> None:
-        if self._temp_dir:
-            shutil.rmtree(self._temp_dir, ignore_errors=True)
         event.accept()

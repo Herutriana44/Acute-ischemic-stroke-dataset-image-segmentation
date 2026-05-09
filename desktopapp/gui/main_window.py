@@ -98,6 +98,13 @@ class MainWindow(QMainWindow):
         # Right: PyVista QtInteractor for 3D visualization
         self._viewer = QtInteractor(self)
         self._viewer.setMinimumSize(QSize(600, 500))
+        
+        # Add a Fullscreen button overlay on the viewer
+        self._btn_fullscreen = QPushButton("Fullscreen", self._viewer)
+        self._btn_fullscreen.setStyleSheet("background-color: white; color: black; border: 1px solid gray;")
+        self._btn_fullscreen.clicked.connect(self._toggle_fullscreen)
+        self._btn_fullscreen.move(10, 10)
+        
         splitter.addWidget(self._viewer)
         splitter.setStretchFactor(1, 1)
         layout.addWidget(splitter)
@@ -225,25 +232,42 @@ class MainWindow(QMainWindow):
             return
         self._display_viewer()
 
+    def _toggle_fullscreen(self) -> None:
+        """Toggle fullscreen mode for the viewer."""
+        if self._viewer.isFullScreen():
+            self._viewer.showNormal()
+            self._btn_fullscreen.setText("Fullscreen")
+        else:
+            self._viewer.showFullScreen()
+            self._btn_fullscreen.setText("Exit Fullscreen")
+
     def _display_viewer(self) -> None:
-        """Display results using PyVista."""
+        """Display results using PyVista with brain model and lesion mesh."""
         if not self._run_dir or not self._result:
             return
 
         # Clear existing
         self._viewer.plotter.clear()
 
-        # Load mesh from backend output if available
-        # The backend typically produces .ply or similar. Check result dict
+        # Load Base Brain Model (assumed to be in 3D_model/Plastinated_Human_Brain/Plastinated_Human_Brain.gltf)
+        # Note: You need to ensure the path to this model is accessible
+        brain_model_path = Path("3D_model/Plastinated_Human_Brain/Plastinated_Human_Brain.gltf")
+        if brain_model_path.exists():
+            import pyvista as pv
+            brain = pv.read(brain_model_path)
+            self._viewer.plotter.add_mesh(brain, color="white", opacity=0.3, label="Brain")
+
+        # Load lesion mesh
         mesh_path = self._run_dir / "lesion_mesh.ply"
         if mesh_path.exists():
             import pyvista as pv
             mesh = pv.read(mesh_path)
-            self._viewer.plotter.add_mesh(mesh, color="red", opacity=0.8)
+            self._viewer.plotter.add_mesh(mesh, color="red", opacity=0.8, label="Lesion")
 
         self._viewer.plotter.add_axes()
+        self._viewer.plotter.add_legend()
         self._viewer.plotter.reset_camera()
-        self._log.append("3D viewer updated using PyVista.")
+        self._log.append("3D viewer updated with brain model and lesion.")
 
     def _save_results(self) -> None:
         if not self._run_dir:

@@ -303,14 +303,36 @@ export function initUnifiedBrainViewer() {
     return;
   }
 
+  // Set host to relative for overlay positioning
+  host.style.position = 'relative';
+
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(host.clientWidth, 550);
   renderer.setClearColor(0x14161a, 1.0);
   host.appendChild(renderer.domElement);
 
+  // Add Fullscreen Button
+  const fsBtn = el('button', 'Fullscreen', 'fs-btn');
+  fsBtn.style.position = 'absolute';
+  fsBtn.style.top = '10px';
+  fsBtn.style.right = '10px';
+  fsBtn.style.zIndex = '1000';
+  fsBtn.onclick = () => {
+    if (!document.fullscreenElement) {
+      host.requestFullscreen().catch(err => alert(`Error: ${err.message}`));
+      fsBtn.textContent = 'Exit Fullscreen';
+    } else {
+      document.exitFullscreen();
+      fsBtn.textContent = 'Fullscreen';
+    }
+  };
+  host.appendChild(fsBtn);
+
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, host.clientWidth / 550, 0.1, 5000);
   camera.position.set(0, 0, 300);
+  
+  const controls = new OrbitControls(camera, renderer.domElement);
   
   scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
   scene.add(new THREE.DirectionalLight(0xffffff, 0.8));
@@ -360,7 +382,20 @@ export function initUnifiedBrainViewer() {
 
   function render() {
     requestAnimationFrame(render);
+    controls.update();
     renderer.render(scene, camera);
   }
   render();
+
+  // Handle Fullscreen resize
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) {
+        renderer.setSize(window.screen.width, window.screen.height);
+        camera.aspect = window.screen.width / window.screen.height;
+    } else {
+        renderer.setSize(host.clientWidth, 550);
+        camera.aspect = host.clientWidth / 550;
+    }
+    camera.updateProjectionMatrix();
+  });
 }

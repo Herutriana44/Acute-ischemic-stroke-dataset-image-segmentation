@@ -304,43 +304,63 @@ export function initUnifiedBrainViewer() {
   }
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(host.clientWidth, 600);
+  renderer.setSize(host.clientWidth, 550);
   renderer.setClearColor(0x14161a, 1.0);
   host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, host.clientWidth / 600, 0.1, 50000);
-  camera.position.set(0, 0, 500);
-  const controls = new OrbitControls(camera, renderer.domElement);
-
+  const camera = new THREE.PerspectiveCamera(45, host.clientWidth / 550, 0.1, 5000);
+  camera.position.set(0, 0, 300);
+  
   scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
   scene.add(new THREE.DirectionalLight(0xffffff, 0.8));
 
   const lesionMesh = new THREE.Mesh(lesionGeom, createLesionMaterial());
   scene.add(lesionMesh);
 
+  const coordDisplay = el('div', '', 'coord-display');
+  coordDisplay.style.marginTop = '10px';
+  coordDisplay.style.fontFamily = 'monospace';
+  coordDisplay.style.fontSize = '12px';
+  host.appendChild(coordDisplay);
+
+  function updateCoordDisplay(brain, lesion) {
+    coordDisplay.innerHTML = `
+      <div><strong>Otak:</strong> Pos(X:${brain.position.x.toFixed(1)}, Y:${brain.position.y.toFixed(1)}, Z:${brain.position.z.toFixed(1)}) 
+      Rot(X:${(brain.rotation.x * 180 / Math.PI).toFixed(0)}°, Y:${(brain.rotation.y * 180 / Math.PI).toFixed(0)}°, Z:${(brain.rotation.z * 180 / Math.PI).toFixed(0)}°)</div>
+      <div><strong>Lesi:</strong> Pos(X:${lesion.position.x.toFixed(1)}, Y:${lesion.position.y.toFixed(1)}, Z:${lesion.position.z.toFixed(1)}) 
+      Rot(X:${(lesion.rotation.x * 180 / Math.PI).toFixed(0)}°, Y:${(lesion.rotation.y * 180 / Math.PI).toFixed(0)}°, Z:${(lesion.rotation.z * 180 / Math.PI).toFixed(0)}°)</div>
+    `;
+  }
+
   const loader = new GLTFLoader();
   loader.load('/brain-model/Plastinated_Human_Brain.gltf', (gltf) => {
     const brain = gltf.scene;
     scene.add(brain);
 
-    // GUI Controls
-    const gui = new GUI({ container: host, title: 'Kontrol Objek 3D' });
-    const brainFolder = gui.addFolder('Otak');
-    brainFolder.add(brain.position, 'x', -100, 100);
-    brainFolder.add(brain.position, 'y', -100, 100);
-    brainFolder.add(brain.position, 'z', -100, 100);
+    const gui = new GUI({ container: host, title: 'Kontrol Transformasi' });
+    const bFolder = gui.addFolder('Otak');
+    bFolder.add(brain.position, 'x', -100, 100).onChange(() => updateCoordDisplay(brain, lesionMesh));
+    bFolder.add(brain.position, 'y', -100, 100).onChange(() => updateCoordDisplay(brain, lesionMesh));
+    bFolder.add(brain.position, 'z', -100, 100).onChange(() => updateCoordDisplay(brain, lesionMesh));
+    bFolder.add(brain.rotation, 'x', 0, Math.PI * 2).name('rot X').onChange(() => updateCoordDisplay(brain, lesionMesh));
+    bFolder.add(brain.rotation, 'y', 0, Math.PI * 2).name('rot Y').onChange(() => updateCoordDisplay(brain, lesionMesh));
+    bFolder.add(brain.rotation, 'z', 0, Math.PI * 2).name('rot Z').onChange(() => updateCoordDisplay(brain, lesionMesh));
     
-    const lesionFolder = gui.addFolder('Lesi');
-    lesionFolder.add(lesionMesh.position, 'x', -100, 100);
-    lesionFolder.add(lesionMesh.position, 'y', -100, 100);
-    lesionFolder.add(lesionMesh.position, 'z', -100, 100);
+    const lFolder = gui.addFolder('Lesi');
+    lFolder.add(lesionMesh.position, 'x', -100, 100).onChange(() => updateCoordDisplay(brain, lesionMesh));
+    lFolder.add(lesionMesh.position, 'y', -100, 100).onChange(() => updateCoordDisplay(brain, lesionMesh));
+    lFolder.add(lesionMesh.position, 'z', -100, 100).onChange(() => updateCoordDisplay(brain, lesionMesh));
+    lFolder.add(lesionMesh.rotation, 'x', 0, Math.PI * 2).name('rot X').onChange(() => updateCoordDisplay(brain, lesionMesh));
+    lFolder.add(lesionMesh.rotation, 'y', 0, Math.PI * 2).name('rot Y').onChange(() => updateCoordDisplay(brain, lesionMesh));
+    lFolder.add(lesionMesh.rotation, 'z', 0, Math.PI * 2).name('rot Z').onChange(() => updateCoordDisplay(brain, lesionMesh));
+
+    updateCoordDisplay(brain, lesionMesh);
   });
 
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
+  function render() {
+    requestAnimationFrame(render);
     renderer.render(scene, camera);
   }
-  animate();
+  render();
 }

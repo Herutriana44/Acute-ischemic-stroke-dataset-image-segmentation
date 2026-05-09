@@ -10,6 +10,11 @@ function addTransformControls(container, meshes) {
   ui.style.background = 'rgba(0,0,0,0.5)';
   ui.style.color = 'white';
   ui.style.zIndex = '10';
+  // Title for the control panel
+  const title = el('div', 'Kontrol Transformasi');
+  title.style.fontWeight = 'bold';
+  title.style.marginBottom = '4px';
+  ui.appendChild(title);
   const createSlider = (label, min, max, step, initial, onInput) => {
     const wrapper = el('div', '');
     const lbl = el('label', label);

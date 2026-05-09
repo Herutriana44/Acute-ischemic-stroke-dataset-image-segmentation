@@ -33,8 +33,28 @@ import torch
 from skimage.measure import marching_cubes
 from PIL import Image
 
+import sys
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MODEL_PATH = PROJECT_ROOT / "best_unet.pt"
+
+def find_model_path() -> Path:
+    """Find best_unet.pt in executable directory, CWD, or project root."""
+    # 1. Check directory of the running executable/script
+    if getattr(sys, 'frozen', False):
+        exe_dir = Path(sys.executable).parent
+        path = exe_dir / "best_unet.pt"
+        if path.exists():
+            return path
+    
+    # 2. Check current working directory
+    path = Path.cwd() / "best_unet.pt"
+    if path.exists():
+        return path
+    
+    # 3. Fallback to PROJECT_ROOT
+    return PROJECT_ROOT / "best_unet.pt"
+
+MODEL_PATH = find_model_path()
 RUNS_BASE = PROJECT_ROOT / "desktopapp" / "runs"
 
 

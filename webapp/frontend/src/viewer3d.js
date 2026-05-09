@@ -1,4 +1,46 @@
 import * as THREE from 'three';
+
+// UI controls for editing position and rotation of meshes
+function addTransformControls(container, meshes) {
+  const ui = el('div', '', 'transform-controls');
+  ui.style.position = 'absolute';
+  ui.style.top = '0';
+  ui.style.left = '0';
+  ui.style.padding = '5px';
+  ui.style.background = 'rgba(0,0,0,0.5)';
+  ui.style.color = 'white';
+  ui.style.zIndex = '10';
+  const createSlider = (label, min, max, step, initial, onInput) => {
+    const wrapper = el('div', '');
+    const lbl = el('label', label);
+    const inp = document.createElement('input');
+    inp.type = 'range';
+    inp.min = min;
+    inp.max = max;
+    inp.step = step;
+    inp.value = initial;
+    inp.oninput = () => onInput(parseFloat(inp.value));
+    wrapper.appendChild(lbl);
+    wrapper.appendChild(inp);
+    ui.appendChild(wrapper);
+  };
+  const pos = new THREE.Vector3();
+  const rot = new THREE.Euler();
+  const apply = () => {
+    for (const mesh of meshes) {
+      mesh.position.copy(pos);
+      mesh.rotation.copy(rot);
+    }
+  };
+  createSlider('Pos X', -100, 100, 0.1, 0, v => { pos.x = v; apply(); });
+  createSlider('Pos Y', -100, 100, 0.1, 0, v => { pos.y = v; apply(); });
+  createSlider('Pos Z', -100, 100, 0.1, 0, v => { pos.z = v; apply(); });
+  createSlider('Rot X', -3.14, 3.14, 0.01, 0, v => { rot.x = v; apply(); });
+  createSlider('Rot Y', -3.14, 3.14, 0.01, 0, v => { rot.y = v; apply(); });
+  createSlider('Rot Z', -3.14, 3.14, 0.01, 0, v => { rot.z = v; apply(); });
+  container.appendChild(ui);
+}
+
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -134,6 +176,7 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransf
   dir.position.set(1, 1, 1);
   scene.add(dir);
 
+  const meshObjs = [];
   for (const m of meshes) {
     if (!m?.geometry) continue;
     const mesh = new THREE.Mesh(m.geometry, m.material);
@@ -141,7 +184,10 @@ function mountThreeViewer(container, meshes, options, gltfUrl = null, meshTransf
       mesh.applyMatrix4(meshTransform);
     }
     scene.add(mesh);
+    meshObjs.push(mesh);
   }
+  // Add UI controls for editing position and rotation of all meshes
+  addTransformControls(container, meshObjs);
 
   if (gltfUrl) {
     const loader = new GLTFLoader();

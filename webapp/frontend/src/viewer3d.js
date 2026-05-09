@@ -320,7 +320,7 @@ export function initUnifiedBrainViewer() {
 
   // Position: slight offset to keep it adjacent to the brain model
   const lesionMesh = new THREE.Mesh(lesionGeom, createLesionMaterial());
-  lesionMesh.position.x = 0.05; 
+  lesionMesh.position.x = 0.016; 
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setClearColor(0x14161a, 1.0);

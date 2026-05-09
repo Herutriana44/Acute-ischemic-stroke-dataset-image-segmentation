@@ -285,6 +285,8 @@ export function initThreeJsViewer() {
   segHost.appendChild(el('p', 'Three.js: mask overlay (oranye) di atas CT (transparan).', 'muted-note'));
 }
 
+import { GUI } from 'lil-gui';
+
 export function initUnifiedBrainViewer() {
   const result = safeJsonFromScript('mesh-data');
   const host = document.getElementById('viewer3d-unified');
@@ -301,54 +303,44 @@ export function initUnifiedBrainViewer() {
     return;
   }
 
-  // --- POSITIONING LOGIC ---
-  // To keep models adjacent but distinct:
-  // 1. Center the lesion at the origin and scale it.
-  // 2. Add a slight offset to the lesion's position (e.g., 0.05 meters) 
-  //    so it sits near the brain rather than inside it.
-
-  lesionGeom.computeBoundingBox();
-  const box = lesionGeom.boundingBox;
-  const center = new THREE.Vector3();
-  box.getCenter(center);
-  lesionGeom.translate(-center.x, -center.y, -center.z);
-
-  const mmToMeter = 0.001;
-  const fitScale = 0.85;
-  const finalScale = mmToMeter * fitScale;
-  lesionGeom.scale(finalScale, finalScale, finalScale);
-
-  // Position: slight offset to keep it adjacent to the brain model
-  const lesionMesh = new THREE.Mesh(lesionGeom, createLesionMaterial());
-  lesionMesh.position.x = 0.00032; 
-
   const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(host.clientWidth, 600);
   renderer.setClearColor(0x14161a, 1.0);
   host.appendChild(renderer.domElement);
+
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50000);
+  const camera = new THREE.PerspectiveCamera(45, host.clientWidth / 600, 0.1, 50000);
+  camera.position.set(0, 0, 500);
   const controls = new OrbitControls(camera, renderer.domElement);
 
-  // Add grid for coordinate reference
-  const grid = new THREE.GridHelper(2, 20, 0x888888, 0x444444);
-  scene.add(grid);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+  scene.add(new THREE.DirectionalLight(0xffffff, 0.8));
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x000000, 1));
+  const lesionMesh = new THREE.Mesh(lesionGeom, createLesionMaterial());
   scene.add(lesionMesh);
 
   const loader = new GLTFLoader();
   loader.load('/brain-model/Plastinated_Human_Brain.gltf', (gltf) => {
-    // Brain is at origin, lesion is at 0.05 offset
-    scene.add(gltf.scene);
+    const brain = gltf.scene;
+    scene.add(brain);
+
+    // GUI Controls
+    const gui = new GUI({ container: host, title: 'Kontrol Objek 3D' });
+    const brainFolder = gui.addFolder('Otak');
+    brainFolder.add(brain.position, 'x', -100, 100);
+    brainFolder.add(brain.position, 'y', -100, 100);
+    brainFolder.add(brain.position, 'z', -100, 100);
+    
+    const lesionFolder = gui.addFolder('Lesi');
+    lesionFolder.add(lesionMesh.position, 'x', -100, 100);
+    lesionFolder.add(lesionMesh.position, 'y', -100, 100);
+    lesionFolder.add(lesionMesh.position, 'z', -100, 100);
   });
 
-  camera.position.z = 0.8;
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
     renderer.render(scene, camera);
   }
   animate();
-
-  host.appendChild(el('p', 'Three.js: Brain model dan lesi berdekatan (adjacent).', 'muted-note'));
 }

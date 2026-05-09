@@ -296,18 +296,17 @@ export function initUnifiedBrainViewer() {
   }
 
   const lesionGeom = result.lesion_mesh ? buildGeometry(result.lesion_mesh) : null;
-
   if (!lesionGeom) {
     host.appendChild(el('p', 'Tidak ada lesi yang terdeteksi.', 'muted-note'));
     return;
   }
 
   // --- POSITIONING LOGIC ---
-  // To keep models separate, we will place them side-by-side.
-  // We don't modify the meshes in-place for the GLTF loader directly,
-  // but we will add the lesion to the scene as a separate mesh.
+  // To keep models adjacent but distinct:
+  // 1. Center the lesion at the origin and scale it.
+  // 2. Add a slight offset to the lesion's position (e.g., 0.05 meters) 
+  //    so it sits near the brain rather than inside it.
 
-  // 1. Lesion setup: Center it at origin, then offset it to the right.
   lesionGeom.computeBoundingBox();
   const box = lesionGeom.boundingBox;
   const center = new THREE.Vector3();
@@ -319,16 +318,9 @@ export function initUnifiedBrainViewer() {
   const finalScale = mmToMeter * fitScale;
   lesionGeom.scale(finalScale, finalScale, finalScale);
 
-  // Position: move lesion to the right (X = 0.2 meters)
+  // Position: slight offset to keep it adjacent to the brain model
   const lesionMesh = new THREE.Mesh(lesionGeom, createLesionMaterial());
-  lesionMesh.position.x = 0.2;
-
-  // 2. Brain model setup: Loaded via GLTFLoader in mountThreeViewer.
-  // We pass a callback to mountThreeViewer to add the lesion mesh once the brain loads.
-
-  const brainMeshes = [];
-  // mountThreeViewer handles GLTF loading. To handle separate objects,
-  // we pass the lesion mesh into the scene via a modified approach.
+  lesionMesh.position.x = 0.05; 
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setClearColor(0x14161a, 1.0);
@@ -337,21 +329,16 @@ export function initUnifiedBrainViewer() {
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50000);
   const controls = new OrbitControls(camera, renderer.domElement);
 
-  // Add light
   scene.add(new THREE.HemisphereLight(0xffffff, 0x000000, 1));
-
-  // Add Lesion
   scene.add(lesionMesh);
 
-  // Add Brain
   const loader = new GLTFLoader();
   loader.load('/brain-model/Plastinated_Human_Brain.gltf', (gltf) => {
-    // Position: move brain to the left (X = -0.2 meters)
-    gltf.scene.position.x = -0.2;
+    // Brain is at origin, lesion is at 0.05 offset
     scene.add(gltf.scene);
   });
 
-  camera.position.z = 1;
+  camera.position.z = 0.8;
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
@@ -359,5 +346,5 @@ export function initUnifiedBrainViewer() {
   }
   animate();
 
-  host.appendChild(el('p', 'Three.js: Brain model (kiri) dan lesi (kanan).', 'muted-note'));
+  host.appendChild(el('p', 'Three.js: Brain model dan lesi berdekatan (adjacent).', 'muted-note'));
 }

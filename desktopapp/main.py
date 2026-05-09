@@ -16,6 +16,27 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 def main() -> None:
+    import logging
+    from PyQt6.QtWidgets import QMessageBox
+    # Configure logging to file and console
+    logger = logging.getLogger('desktopapp')
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    # File handler
+    file_handler = logging.FileHandler('desktopapp.log')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    # Global exception hook to show error dialog and log
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        logger.error('Uncaught exception', exc_info=(exc_type, exc_value, exc_traceback))
+        err_msg = ''.join(logging.Formatter().formatException((exc_type, exc_value, exc_traceback)))
+        QMessageBox.critical(None, 'Application Error', f'An unexpected error occurred:\n{err_msg}')
+    import sys
+    sys.excepthook = handle_exception
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import Qt
     from gui.main_window import MainWindow

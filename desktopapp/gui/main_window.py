@@ -28,12 +28,45 @@ from pyvistaqt import QtInteractor
 from gui.workers import InferenceWorker
 
 
+import sys
+import logging
+
+class EmittingStream:
+    """Redirect writes to a QTextEdit and optionally to logger."""
+    def __init__(self, widget, log_func=None):
+        self.widget = widget
+        self.log_func = log_func
+        self.buffer = ''
+    def write(self, text):
+        # Write to widget
+        self.widget.moveCursor(self.widget.textCursor().End)
+        self.widget.insertPlainText(text)
+        self.widget.moveCursor(self.widget.textCursor().End)
+        # Log if provided
+        if self.log_func:
+            self.log_func(text.rstrip())
+    def flush(self):
+        pass
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
+        # Initialize UI first so _log widget exists
+        self._init_ui()
+        # Set up logging to file and redirect output to GUI log
+        self._logger = logging.getLogger('desktopapp_gui')
+        self._logger.setLevel(logging.DEBUG)
+        if not any(isinstance(h, logging.FileHandler) for h in self._logger.handlers):
+            file_handler = logging.FileHandler('desktopapp_gui.log')
+            formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+            file_handler.setFormatter(formatter)
+            self._logger.addHandler(file_handler)
+        # Redirect stdout/stderr to QTextEdit and logger
+        self._log_stream = EmittingStream(self._log, self._logger.debug)
+        sys.stdout = self._log_stream
+        sys.stderr = self._log_stream
         self._run_dir: Path | None = None
         self._result: dict | None = None
-        self._init_ui()
 
     # ------------------------------------------------------------------
     # UI setup

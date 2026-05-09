@@ -47,54 +47,7 @@
 </section>
 {% endmacro %}
 
-{% if result.enable_3d %}
-{% call collapsible("Visualisasi 3D (DICOM + Mask)", "dicom-3d") %}
-  <p>Objek abu-abu: kontur volume CT. Objek merah: area prediksi lesi.</p>
-  <div id="viewer3d" class="viewer"></div>
-{% endcall %}
-{% endif %}
-
-{% call collapsible("Visualisasi (Orthogonal Viewer)", "papaya") %}
-  <p><strong>CT + mask (NIfTI)</strong> memakai pasangan <code>{{ result.ct_view_nii }}</code> + <code>{{ result.mask_view_nii }}</code> (susunan H×W×Z, affine sejajar) agar Papaya menampilkan overlay dengan stabil. Mode <strong>DICOM + mask</strong> tidak diubah: tetap <code>.dcm</code> + <code>{{ result.mask_nii }}</code>.</p>
-  <div class="papaya-toolbar" role="group" aria-label="Mode Papaya">
-    <button type="button" class="papaya-mode active" id="papaya-btn-nifti" data-mode="nifti">CT + mask (NIfTI, disarankan)</button>
-    <button type="button" class="papaya-mode" id="papaya-btn-dicom" data-mode="dicom">DICOM + mask</button>
-  </div>
-  <div class="papaya-wrap" id="papaya-host"></div>
-{% endcall %}
-
-{% if result.enable_3d %}
-{% call collapsible("Visualisasi 3D — VTK.js (Volume Render)", "vtk") %}
-  <p>Tampilan dipisah dua panel: <strong>CT volume render</strong> vs <strong>CT + mask overlay</strong>. Ini membaca <code>hu_volume.npy</code> + <code>mask_pred.npy</code> dari hasil inferensi (di-stream sebagai binary).</p>
-  <div class="vtk-compare">
-    <div class="vtk-panel">
-      <div class="vtk-panel-title">CT VOLUME</div>
-      <div id="viewer3d-vtk-ct" class="viewer viewer-surface"></div>
-    </div>
-    <div class="vtk-panel">
-      <div class="vtk-panel-title">CT + MASK</div>
-      <div id="viewer3d-vtk-seg" class="viewer viewer-surface"></div>
-    </div>
-  </div>
-{% endcall %}
-
-{% call collapsible("Visualisasi 3D — Three.js (Mesh Compare)", "threejs-mesh") %}
-  <p>Tampilan dipisah dua panel: <strong>CT surface (mesh)</strong> vs <strong>CT surface + lesi (mesh)</strong>. Viewer memakai mesh marching-cubes (<code>hu_mesh</code> / <code>lesion_mesh</code>) yang tersimpan di <code>result.json</code>.</p>
-  {% if result.mesh_ply_colored or result.mesh_3d_colored_zip %}
-  <p class="muted-note">Unduh model permukaan (mesh marching cubes): {% if result.mesh_ply_colored %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_ply_colored) }}" download>PLY gabungan</a>{% endif %}{% if result.mesh_ply_colored and result.mesh_3d_colored_zip %} · {% endif %}{% if result.mesh_3d_colored_zip %}<a class="download-link" href="{{ url_for('runs_file', run_id=result.run_id, filename=result.mesh_3d_colored_zip) }}" download>ZIP (OBJ+MTL)</a>{% endif %}.</p>
-  {% endif %}
-  <div class="vtk-compare">
-    <div class="vtk-panel">
-      <div class="vtk-panel-title">CT SURFACE (MESH)</div>
-      <div id="viewer3d-three-ct" class="viewer viewer-surface"></div>
-    </div>
-    <div class="vtk-panel">
-      <div class="vtk-panel-title">CT + LESI (MESH)</div>
-      <div id="viewer3d-three-seg" class="viewer viewer-surface"></div>
-    </div>
-  </div>
-{% endcall %}
-
+<!-- `
 {% call collapsible("Visualisasi 3D — Brain Model + Lesion (Unified)", "brain-unified") %}
   <p>Menampilkan model 3D otak (GLTF) dengan overlay lesi (oranye) dalam satu visualisasi terpadu. Drag untuk rotate, scroll untuk zoom.</p>
   <div id="viewer3d-unified" class="viewer viewer-surface"></div>

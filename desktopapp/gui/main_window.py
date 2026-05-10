@@ -279,33 +279,84 @@ class MainWindow(QMainWindow):
         self._display_viewer()
 
     def _display_viewer(self) -> None:
-        """Display results using both PyVista (3D Mesh) and HTML (Dashboard)."""
+        """Display results using both PyVista (3D Mesh tab) and HTML (Dashboard tab)."""
         if not self._run_dir or not self._result:
             return
 
-        # 1. Update PyVista Tab
+        # ── 1. PyVista 3D Mesh tab ────────────────────────────────────────
+        self._update_pyvista_tab()
+
+        # ── 2. HTML Dashboard tab ─────────────────────────────────────────
+        self._update_html_tab()
+
+    def _update_pyvista_tab(self) -> None:
+        """Load DICOM-derived OBJ meshes into the PyVista QtInteractor."""
+        import pyvista as pv
+
         self._viewer.clear()
+        loaded_any = False
+
         brain_obj_path = self._run_dir / "brain.obj"
         if brain_obj_path.exists():
-            import pyvista as pv
-            brain_mesh = pv.read(brain_obj_path)
-            self._viewer.add_mesh(brain_mesh, color="white", opacity=0.3, label="Brain")
+            try:
+                brain_mesh = pv.read(str(brain_obj_path))
+                self._viewer.add_mesh(
+                    brain_mesh,
+                    color="#bcc8da",   # blue-gray, matches HTML viewer
+                    opacity=0.30,
+                    label="CT Brain Surface",
+                    smooth_shading=True,
+                )
+                loaded_any = True
+                self._log.append(
+                    f"3D Mesh: loaded brain.obj "
+                    f"({brain_mesh.n_points} pts, {brain_mesh.n_cells} faces)"
+                )
+            except Exception as exc:
+                self._log.append(f"3D Mesh: could not load brain.obj — {exc}")
+
         lesion_obj_path = self._run_dir / "lesion.obj"
         if lesion_obj_path.exists():
-            import pyvista as pv
-            lesion_mesh = pv.read(lesion_obj_path)
-            self._viewer.add_mesh(lesion_mesh, color="red", opacity=0.8, label="Lesion")
-        self._viewer.add_axes()
-        self._viewer.add_legend()
-        self._viewer.reset_camera()
-        self._log.append("3D Mesh tab updated.")
+            try:
+                lesion_mesh = pv.read(str(lesion_obj_path))
+                self._viewer.add_mesh(
+                    lesion_mesh,
+                    color="#ea580c",   # orange, matches HTML viewer
+                    opacity=0.85,
+                    label="Ischemic Lesion",
+                    smooth_shading=True,
+                )
+                loaded_any = True
+                self._log.append(
+                    f"3D Mesh: loaded lesion.obj "
+                    f"({lesion_mesh.n_points} pts, {lesion_mesh.n_cells} faces)"
+                )
+            except Exception as exc:
+                self._log.append(f"3D Mesh: could not load lesion.obj — {exc}")
 
-        # 2. Update HTML Dashboard Tab
-        temp_dir = Path(tempfile.gettempdir()) / "stroke_viewer"
-        temp_dir.mkdir(exist_ok=True)
-        html_path = build_result_html(self._run_dir, self._result, temp_dir)
-        self._browser.setUrl(QUrl.fromLocalFile(str(html_path)))
-        self._log.append("Dashboard tab updated.")
+        if not loaded_any:
+            self._log.append("3D Mesh: no OBJ files found (single-image mode or no lesion).")
+
+        # Axes, legend, camera
+        self._viewer.add_axes()
+        if loaded_any:
+            self._viewer.add_legend()
+        self._viewer.reset_camera()
+        self._viewer.render()
+
+    def _update_html_tab(self) -> None:
+        """Build and load the HTML dashboard into QWebEngineView."""
+        # Use a run-specific temp dir so stale files from previous runs
+        # don't bleed through.
+        run_id = self._result.get("run_id", "unknown") if self._result else "unknown"
+        temp_dir = Path(tempfile.gettempdir()) / "stroke_viewer" / run_id
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            html_path = build_result_html(self._run_dir, self._result, temp_dir)
+            self._browser.setUrl(QUrl.fromLocalFile(str(html_path)))
+            self._log.append(f"Dashboard tab updated → {html_path}")
+        except Exception as exc:
+            self._log.append(f"Dashboard tab error: {exc}")
 
     def _save_results(self) -> None:
         if not self._run_dir:

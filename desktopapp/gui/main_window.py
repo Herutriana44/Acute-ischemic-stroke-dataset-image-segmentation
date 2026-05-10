@@ -145,6 +145,10 @@ class MainWindow(QMainWindow):
         settings.setAttribute(settings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         settings.setAttribute(settings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(settings.WebAttribute.JavascriptEnabled, True)
+        
+        # Add Console Debugger
+        self._browser.page().javaScriptConsoleMessage = self._handle_js_console
+        
         self._tabs.addTab(self._browser, "Dashboard")
         
         splitter.addWidget(self._tabs)
@@ -315,6 +319,9 @@ class MainWindow(QMainWindow):
         shutil.copytree(self._run_dir, dest_path)
         self._log.append(f"Results saved to: {dest_path}")
         QMessageBox.information(self, "Saved", f"Results saved to:\n{dest_path}")
+
+    def _handle_js_console(self, level, message, line, source_id):
+        self._log.append(f"JS Console [{level}]: {message} (at {source_id}:{line})")
 
     def _show_about(self) -> None:
         QMessageBox.about(

@@ -1,0 +1,21 @@
+revisi kode projek berikut
+
+
+
+1. pada desktopapp, untuk bagian 3D mesh, tambahkan model DICOM object model(ada konversi dari series DICOM menjadi file .obj 3D, dan diload di tampilan 3D mesh)
+
+2. untuk html viewer, masih belum tampil di desktopapp htmlviewer, ada error berikut
+
+
+
+```
+
+python main.py
+
+js: Uncaught TypeError: Cannot set properties of undefined (setting 'OrbitControls')
+
+js: Three.js (THREE) is not defined!
+
+js: Three.js (THREE) is not defined!
+
+```

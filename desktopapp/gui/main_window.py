@@ -19,11 +19,14 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSplitter,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 from pyvistaqt import QtInteractor
+from viewer.html_viewer import build_result_html
 
 from gui.workers import InferenceWorker
 
@@ -128,17 +131,23 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self._log)
         splitter.addWidget(left)
 
-        # Right: PyVista QtInteractor for 3D visualization
+        # Right: Tabbed viewer (3D + Dashboard)
+        self._tabs = QTabWidget()
+        
+        # Tab 1: PyVista QtInteractor
         self._viewer = QtInteractor(self)
         self._viewer.setMinimumSize(QSize(600, 500))
+        self._tabs.addTab(self._viewer, "3D Mesh")
         
-        # Add a Fullscreen button overlay on the viewer
-        self._btn_fullscreen = QPushButton("Fullscreen", self._viewer)
-        self._btn_fullscreen.setStyleSheet("background-color: white; color: black; border: 1px solid gray;")
-        self._btn_fullscreen.clicked.connect(self._toggle_fullscreen)
-        self._btn_fullscreen.move(10, 10)
+        # Tab 2: QWebEngineView for HTML/Papaya/VTK/Three.js
+        self._browser = QWebEngineView()
+        settings = self._browser.settings()
+        settings.setAttribute(settings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(settings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(settings.WebAttribute.JavascriptEnabled, True)
+        self._tabs.addTab(self._browser, "Dashboard")
         
-        splitter.addWidget(self._viewer)
+        splitter.addWidget(self._tabs)
         splitter.setStretchFactor(1, 1)
         layout.addWidget(splitter)
 
@@ -265,41 +274,34 @@ class MainWindow(QMainWindow):
             return
         self._display_viewer()
 
-    def _toggle_fullscreen(self) -> None:
-        """Toggle fullscreen mode for the viewer."""
-        if self._viewer.isFullScreen():
-            self._viewer.showNormal()
-            self._btn_fullscreen.setText("Fullscreen")
-        else:
-            self._viewer.showFullScreen()
-            self._btn_fullscreen.setText("Exit Fullscreen")
-
     def _display_viewer(self) -> None:
-        """Display results using PyVista with brain OBJ and lesion OBJ."""
+        """Display results using both PyVista (3D Mesh) and HTML (Dashboard)."""
         if not self._run_dir or not self._result:
             return
 
-        # Clear existing
+        # 1. Update PyVista Tab
         self._viewer.clear()
-
-        # Load Brain OBJ if exists
         brain_obj_path = self._run_dir / "brain.obj"
         if brain_obj_path.exists():
             import pyvista as pv
             brain_mesh = pv.read(brain_obj_path)
             self._viewer.add_mesh(brain_mesh, color="white", opacity=0.3, label="Brain")
-
-        # Load lesion OBJ if exists
         lesion_obj_path = self._run_dir / "lesion.obj"
         if lesion_obj_path.exists():
             import pyvista as pv
             lesion_mesh = pv.read(lesion_obj_path)
             self._viewer.add_mesh(lesion_mesh, color="red", opacity=0.8, label="Lesion")
-
         self._viewer.add_axes()
         self._viewer.add_legend()
         self._viewer.reset_camera()
-        self._log.append("3D viewer updated with OBJ models.")
+        self._log.append("3D Mesh tab updated.")
+
+        # 2. Update HTML Dashboard Tab
+        temp_dir = Path(tempfile.gettempdir()) / "stroke_viewer"
+        temp_dir.mkdir(exist_ok=True)
+        html_path = build_result_html(self._run_dir, self._result, temp_dir)
+        self._browser.setUrl(QUrl.fromLocalFile(str(html_path)))
+        self._log.append("Dashboard tab updated.")
 
     def _save_results(self) -> None:
         if not self._run_dir:

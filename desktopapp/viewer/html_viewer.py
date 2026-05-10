@@ -72,19 +72,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
 <script id="mesh-data" type="application/json">[[MESH_JSON]]</script>
 
-<!-- VTK.js -->
-<script src="https://unpkg.com/@kitware/vtk.js@30.6.1/dist/vtk.js"></script>
-
-<!-- Papaya Viewer -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.css">
-<script src="https://cdn.jsdelivr.net/npm/papaya-viewer@1.0.1455/release/current/standard/papaya.js"></script>
-
-<!-- Plotly -->
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-
-<!-- Three.js -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+<!-- Local Assets -->
+<link rel="stylesheet" href="file://[[STATIC_DIR]]/css/papaya.css">
+<script src="file://[[STATIC_DIR]]/js/vtk.js"></script>
+<script src="file://[[STATIC_DIR]]/js/papaya.js"></script>
+<script src="file://[[STATIC_DIR]]/js/plotly.min.js"></script>
+<script src="file://[[STATIC_DIR]]/js/three.min.js"></script>
+<script src="file://[[STATIC_DIR]]/js/OrbitControls.js"></script>
 
 <script>
 // Collapsible sections
@@ -102,6 +96,11 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   var meshData = JSON.parse(document.getElementById('mesh-data').textContent);
 
   function createMeshScene(containerId, mesh, color, opacity) {
+    if (typeof THREE === 'undefined') {
+        console.error("Three.js (THREE) is not defined!");
+        return;
+    }
+    
     var container = document.getElementById(containerId);
     if (!container || !mesh || !mesh.x || mesh.x.length === 0) return;
 
@@ -313,8 +312,13 @@ def build_result_html(run_dir: Path, result: dict, temp_dir: Path) -> Path:
     nii_ct_url = f"file://{temp_dir / nii_ct_name}" if nii_ct_name else ""
     nii_mask_url = f"file://{temp_dir / nii_mask_name}" if nii_mask_name else ""
 
+    # Static dir path for local assets
+    static_dir = Path(__file__).parent.parent / "static"
+    static_dir_str = static_dir.as_posix()
+
     # Fill template using simple replacement
     html = _HTML_TEMPLATE
+    html = html.replace("[[STATIC_DIR]]", static_dir_str)
     html = html.replace("[[RUN_ID]]", str(run_id))
     html = html.replace("[[SLICES]]", str(slices))
     html = html.replace("[[RES_HW]]", res_hw)

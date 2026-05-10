@@ -25,10 +25,27 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebEngineCore import QWebEnginePage
 from pyvistaqt import QtInteractor
 from viewer.html_viewer import build_result_html
 
 from gui.workers import InferenceWorker
+
+
+class _ConsolePage(QWebEnginePage):
+    """QWebEnginePage subclass that forwards JS console messages to a callback."""
+
+    def __init__(self, log_callback, parent=None):
+        super().__init__(parent)
+        self._log_callback = log_callback
+
+    def javaScriptConsoleMessage(self, level, message, line_number, source_id):
+        level_name = {
+            QWebEnginePage.JavaScriptConsoleMessageLevel.InfoMessageLevel: "INFO",
+            QWebEnginePage.JavaScriptConsoleMessageLevel.WarningMessageLevel: "WARN",
+            QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel: "ERROR",
+        }.get(level, str(level))
+        self._log_callback(f"js: [{level_name}] {message}  ({source_id}:{line_number})")
 
 
 import sys
@@ -139,15 +156,15 @@ class MainWindow(QMainWindow):
         self._viewer.setMinimumSize(QSize(600, 500))
         self._tabs.addTab(self._viewer, "3D Mesh")
         
-        # Tab 2: QWebEngineView for HTML/Papaya/VTK/Three.js
+        # Tab 2: QWebEngineView for HTML/Papaya/Three.js
         self._browser = QWebEngineView()
+        # Use custom page subclass to capture JS console messages
+        self._console_page = _ConsolePage(self._log.append, self._browser)
+        self._browser.setPage(self._console_page)
         settings = self._browser.settings()
         settings.setAttribute(settings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         settings.setAttribute(settings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(settings.WebAttribute.JavascriptEnabled, True)
-        
-        # Add Console Debugger
-        self._browser.page().javaScriptConsoleMessage = self._handle_js_console
         
         self._tabs.addTab(self._browser, "Dashboard")
         
@@ -370,9 +387,6 @@ class MainWindow(QMainWindow):
         shutil.copytree(self._run_dir, dest_path)
         self._log.append(f"Results saved to: {dest_path}")
         QMessageBox.information(self, "Saved", f"Results saved to:\n{dest_path}")
-
-    def _handle_js_console(self, level, message, line, source_id):
-        self._log.append(f"JS Console [{level}]: {message} (at {source_id}:{line})")
 
     def _show_about(self) -> None:
         QMessageBox.about(

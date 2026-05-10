@@ -290,6 +290,9 @@ def _run_inference_core(
         _write_colored_ply(ply_path, hu_surf, lesion_surf)
         mesh_ply_name = ply_path.name if ply_path.exists() else ""
 
+        if lesion_surf:
+            _write_colored_ply(run_dir / "lesion_mesh.ply", None, lesion_surf)
+
         # Save numpy volumes for VTK viewer
         np.save(run_dir / "hu_volume.npy", hu_vol)
         np.save(run_dir / "mask_pred.npy", masks)

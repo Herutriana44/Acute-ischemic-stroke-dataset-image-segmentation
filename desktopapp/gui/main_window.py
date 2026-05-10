@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
             return
 
         # Clear existing
-        self._viewer.plotter.clear()
+        self._viewer.clear()
 
         # Load Base Brain Model (assumed to be in 3D_model/Plastinated_Human_Brain/Plastinated_Human_Brain.gltf)
         # Note: You need to ensure the path to this model is accessible
@@ -288,18 +288,18 @@ class MainWindow(QMainWindow):
         if brain_model_path.exists():
             import pyvista as pv
             brain = pv.read(brain_model_path)
-            self._viewer.plotter.add_mesh(brain, color="white", opacity=0.3, label="Brain")
+            self._viewer.add_mesh(brain, color="white", opacity=0.3, label="Brain")
 
         # Load lesion mesh
         mesh_path = self._run_dir / "lesion_mesh.ply"
         if mesh_path.exists():
             import pyvista as pv
             mesh = pv.read(mesh_path)
-            self._viewer.plotter.add_mesh(mesh, color="red", opacity=0.8, label="Lesion")
+            self._viewer.add_mesh(mesh, color="red", opacity=0.8, label="Lesion")
 
-        self._viewer.plotter.add_axes()
-        self._viewer.plotter.add_legend()
-        self._viewer.plotter.reset_camera()
+        self._viewer.add_axes()
+        self._viewer.add_legend()
+        self._viewer.reset_camera()
         self._log.append("3D viewer updated with brain model and lesion.")
 
     def _save_results(self) -> None:

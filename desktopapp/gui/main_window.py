@@ -275,32 +275,31 @@ class MainWindow(QMainWindow):
             self._btn_fullscreen.setText("Exit Fullscreen")
 
     def _display_viewer(self) -> None:
-        """Display results using PyVista with brain model and lesion mesh."""
+        """Display results using PyVista with brain OBJ and lesion OBJ."""
         if not self._run_dir or not self._result:
             return
 
         # Clear existing
         self._viewer.clear()
 
-        # Load Base Brain Model (assumed to be in 3D_model/Plastinated_Human_Brain/Plastinated_Human_Brain.gltf)
-        # Note: You need to ensure the path to this model is accessible
-        brain_model_path = Path("3D_model/Plastinated_Human_Brain/Plastinated_Human_Brain.gltf")
-        if brain_model_path.exists():
+        # Load Brain OBJ if exists
+        brain_obj_path = self._run_dir / "brain.obj"
+        if brain_obj_path.exists():
             import pyvista as pv
-            brain = pv.read(brain_model_path)
-            self._viewer.add_mesh(brain, color="white", opacity=0.3, label="Brain")
+            brain_mesh = pv.read(brain_obj_path)
+            self._viewer.add_mesh(brain_mesh, color="white", opacity=0.3, label="Brain")
 
-        # Load lesion mesh
-        mesh_path = self._run_dir / "lesion_mesh.ply"
-        if mesh_path.exists():
+        # Load lesion OBJ if exists
+        lesion_obj_path = self._run_dir / "lesion.obj"
+        if lesion_obj_path.exists():
             import pyvista as pv
-            mesh = pv.read(mesh_path)
-            self._viewer.add_mesh(mesh, color="red", opacity=0.8, label="Lesion")
+            lesion_mesh = pv.read(lesion_obj_path)
+            self._viewer.add_mesh(lesion_mesh, color="red", opacity=0.8, label="Lesion")
 
         self._viewer.add_axes()
         self._viewer.add_legend()
         self._viewer.reset_camera()
-        self._log.append("3D viewer updated with brain model and lesion.")
+        self._log.append("3D viewer updated with OBJ models.")
 
     def _save_results(self) -> None:
         if not self._run_dir:

@@ -180,6 +180,16 @@ def _find_dicom_series(extracted_dir: Path) -> Path:
     raise RuntimeError("No DICOM CT series found in archive.")
 
 
+def _write_obj(path: Path, verts: np.ndarray, faces: np.ndarray) -> None:
+    """Write mesh to Wavefront OBJ format."""
+    with path.open("w", encoding="utf-8") as f:
+        for v in verts:
+            f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
+        for face in faces:
+            # OBJ faces are 1-indexed
+            f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
+
+
 def _run_inference_core(
     dicom_dir: Path, run_id: str, run_dir: Path
 ) -> dict:
@@ -283,8 +293,10 @@ def _run_inference_core(
 
         if hu_surf:
             hu_mesh = _mesh_to_json(*hu_surf)
+            _write_obj(run_dir / "brain.obj", *hu_surf)
         if lesion_surf:
             lesion_mesh = _mesh_to_json(*lesion_surf)
+            _write_obj(run_dir / "lesion.obj", *lesion_surf)
 
         ply_path = run_dir / "mesh_ct_lesion_colored.ply"
         _write_colored_ply(ply_path, hu_surf, lesion_surf)
@@ -323,6 +335,7 @@ def _run_inference_core(
 
     (run_dir / "result.json").write_text(json.dumps(result), encoding="utf-8")
     return result
+
 
 
 def _run_image_inference_core(

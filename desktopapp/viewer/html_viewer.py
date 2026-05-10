@@ -185,10 +185,16 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
   window.papayaParams = params;
   var host = document.getElementById("papaya-host");
-  if (host && window.papaya && window.papaya.Container) {
-    host.innerHTML = '<div class="papaya" data-params="papayaParams"></div>';
-    window.papaya.Container.startPapaya();
+  
+  function start() {
+    if (host && window.papaya && window.papaya.Container) {
+      host.innerHTML = '<div class="papaya" data-params="papayaParams"></div>';
+      window.papaya.Container.startPapaya();
+    } else {
+      setTimeout(start, 500);
+    }
   }
+  start();
 })();
 </script>
 </body>
@@ -259,16 +265,16 @@ def _build_papaya_section(result: dict, run_dir: Path, temp_dir: Path) -> str:
     if nii_mask.exists():
         shutil.copy2(nii_mask, temp_dir / nii_mask.name)
 
-    return """<section class="card collapsible-section">
-  <div class="collapsible-header">
+    return """<section class="card collapsible-section open">
+    <div class="collapsible-header">
     <h2>Papaya Viewer (NIfTI)</h2>
     <span class="collapse-icon">&#9660;</span>
-  </div>
-  <div class="collapsible-content">
+    </div>
+    <div class="collapsible-content">
     <p>CT + mask overlay using Papaya DICOM/NIfTI viewer.</p>
     <div class="papaya-wrap" id="papaya-host"></div>
-  </div>
-</section>"""
+    </div>
+    </section>"""
 
 
 # ---------------------------------------------------------------------------

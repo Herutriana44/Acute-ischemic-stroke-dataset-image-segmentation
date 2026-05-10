@@ -47,7 +47,7 @@
 </section>
 {% endmacro %}
 
-<!-- {% if result.enable_3d %}
+{% if result.enable_3d %}
 {% call collapsible("Visualisasi 3D (DICOM + Mask)", "dicom-3d") %}
   <p>Objek abu-abu: kontur volume CT. Objek merah: area prediksi lesi.</p>
   <div id="viewer3d" class="viewer"></div>
@@ -62,7 +62,7 @@
   </div>
   <div class="papaya-wrap" id="papaya-host"></div>
 {% endcall %}
-
+<!-- 
 {% if result.enable_3d %}
 {% call collapsible("Visualisasi 3D — VTK.js (Volume Render)", "vtk") %}
   <p>Tampilan dipisah dua panel: <strong>CT volume render</strong> vs <strong>CT + mask overlay</strong>. Ini membaca <code>hu_volume.npy</code> + <code>mask_pred.npy</code> dari hasil inferensi (di-stream sebagai binary).</p>
@@ -77,6 +77,7 @@
     </div>
   </div>
 {% endcall %}
+-->
 
 {% call collapsible("Visualisasi 3D — Three.js (Mesh Compare)", "threejs-mesh") %}
   <p>Tampilan dipisah dua panel: <strong>CT surface (mesh)</strong> vs <strong>CT surface + lesi (mesh)</strong>. Viewer memakai mesh marching-cubes (<code>hu_mesh</code> / <code>lesion_mesh</code>) yang tersimpan di <code>result.json</code>.</p>
@@ -93,7 +94,7 @@
       <div id="viewer3d-three-seg" class="viewer viewer-surface"></div>
     </div>
   </div>
-{% endcall %} -->
+{% endcall %} 
 
 {% call collapsible("Visualisasi 3D — Brain Model + Lesion (Unified)", "brain-unified") %}
   <p>Menampilkan model 3D otak (GLTF) dengan overlay lesi (oranye) dalam satu visualisasi terpadu. Drag untuk rotate, scroll untuk zoom.</p>

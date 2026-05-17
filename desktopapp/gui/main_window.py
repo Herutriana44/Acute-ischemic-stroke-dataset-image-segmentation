@@ -30,6 +30,7 @@ from pyvistaqt import QtInteractor
 from viewer.html_viewer import build_result_html
 
 from gui.workers import InferenceWorker
+from gui.dicom_viewer import DicomViewer
 
 
 class _ConsolePage(QWebEnginePage):
@@ -167,6 +168,10 @@ class MainWindow(QMainWindow):
         settings.setAttribute(settings.WebAttribute.JavascriptEnabled, True)
         
         self._tabs.addTab(self._browser, "Dashboard")
+
+        # Tab 3: Native DICOM multi-planar viewer (Axial / Coronal / Sagittal)
+        self._dicom_viewer = DicomViewer()
+        self._tabs.addTab(self._dicom_viewer, "DICOM Viewer")
         
         splitter.addWidget(self._tabs)
         splitter.setStretchFactor(1, 1)
@@ -306,6 +311,9 @@ class MainWindow(QMainWindow):
         # ── 2. HTML Dashboard tab ─────────────────────────────────────────
         self._update_html_tab()
 
+        # ── 3. Native DICOM multi-planar viewer tab ───────────────────────
+        self._update_dicom_viewer_tab()
+
     def _update_pyvista_tab(self) -> None:
         """Load DICOM-derived OBJ meshes into the PyVista QtInteractor."""
         import pyvista as pv
@@ -374,6 +382,80 @@ class MainWindow(QMainWindow):
             self._log.append(f"Dashboard tab updated → {html_path}")
         except Exception as exc:
             self._log.append(f"Dashboard tab error: {exc}")
+
+    def _update_dicom_viewer_tab(self) -> None:
+        """Load CT and mask volumes into the native DICOM multi-planar viewer."""
+        if not self._run_dir or not self._result:
+            return
+
+        result = self._result
+
+        # Only available for DICOM (3-D) runs
+        if not result.get("enable_3d"):
+            self._log.append("DICOM Viewer: not available for single-image mode.")
+            self._dicom_viewer.clear()
+            return
+
+        try:
+            import numpy as np
+
+            # Prefer pre-saved numpy volumes (fastest)
+            hu_npy = self._run_dir / "hu_volume.npy"
+            mask_npy = self._run_dir / "mask_pred.npy"
+
+            if hu_npy.exists() and mask_npy.exists():
+                ct_vol = np.load(str(hu_npy))   # raw HU, shape (Z, Y, X)
+                mask_vol = np.load(str(mask_npy))
+                use_hu = True
+                self._log.append("DICOM Viewer: loaded volumes from .npy cache.")
+            else:
+                # Fall back to windowed NIfTI
+                import nibabel as nib
+                ct_nii_name = result.get("ct_hu_nii") or result.get("ct_nii", "")
+                mask_nii_name = result.get("mask_nii", "")
+                ct_nii_path = self._run_dir / ct_nii_name if ct_nii_name else None
+                mask_nii_path = self._run_dir / mask_nii_name if mask_nii_name else None
+
+                if ct_nii_path is None or not ct_nii_path.exists():
+                    self._log.append("DICOM Viewer: CT NIfTI not found.")
+                    return
+
+                ct_img = nib.load(str(ct_nii_path))
+                ct_vol = np.asarray(ct_img.dataobj, dtype=np.float32)
+                # NIfTI from inference is stored as (Y, X, Z) → transpose to (Z, Y, X)
+                if ct_vol.ndim == 3:
+                    ct_vol = ct_vol.transpose(2, 0, 1)
+
+                mask_vol = None
+                if mask_nii_path and mask_nii_path.exists():
+                    mask_img = nib.load(str(mask_nii_path))
+                    mask_vol = np.asarray(mask_img.dataobj, dtype=np.float32)
+                    if mask_vol.ndim == 3:
+                        mask_vol = mask_vol.transpose(2, 0, 1)
+
+                use_hu = "hu" in ct_nii_name.lower()
+                self._log.append("DICOM Viewer: loaded volumes from NIfTI.")
+
+            spacing_raw = result.get("spacing", [1.0, 1.0, 1.0])
+            # spacing from inference is [ps_row, ps_col, ps_z]
+            spacing = (
+                float(spacing_raw[2]),  # z
+                float(spacing_raw[0]),  # y (row)
+                float(spacing_raw[1]),  # x (col)
+            )
+
+            self._dicom_viewer.load_volumes(
+                ct_vol, mask_vol, spacing=spacing, use_hu=use_hu
+            )
+            self._log.append(
+                f"DICOM Viewer: loaded {ct_vol.shape} volume, "
+                f"spacing={spacing[0]:.3f}×{spacing[1]:.3f}×{spacing[2]:.3f} mm"
+            )
+
+        except Exception as exc:
+            import traceback
+            self._log.append(f"DICOM Viewer error: {exc}")
+            traceback.print_exc()
 
     def _save_results(self) -> None:
         if not self._run_dir:

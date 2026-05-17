@@ -17,7 +17,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 def main() -> None:
     import logging
-    from PyQt6.QtWidgets import QMessageBox
     # Configure logging to file and console
     logger = logging.getLogger('desktopapp')
     logger.setLevel(logging.DEBUG)
@@ -30,17 +29,14 @@ def main() -> None:
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    # Global exception hook to show error dialog and log
-    def handle_exception(exc_type, exc_value, exc_traceback):
-        logger.error('Uncaught exception', exc_info=(exc_type, exc_value, exc_traceback))
-        err_msg = ''.join(logging.Formatter().formatException((exc_type, exc_value, exc_traceback)))
-        QMessageBox.critical(None, 'Application Error', f'An unexpected error occurred:\n{err_msg}')
-    import sys
-    sys.excepthook = handle_exception
-    from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtCore import Qt
-    from gui.main_window import MainWindow
 
+    from PyQt6.QtWidgets import QApplication, QMessageBox
+    from PyQt6.QtCore import Qt
+
+    # Set the required attribute before creating the application
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
+
+    # 1. Create QApplication immediately
     app = QApplication(sys.argv)
     app.setApplicationName("Acute Ischemic Stroke — Segmentation")
     app.setOrganizationName("MedicalAI")
@@ -49,9 +45,27 @@ def main() -> None:
     if hasattr(Qt.ApplicationAttribute, 'AA_UseHighDpiPixmaps'):
         app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
 
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    # 2. Global exception hook to show error dialog and log
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        logger.error('Uncaught exception', exc_info=(exc_type, exc_value, exc_traceback))
+        err_msg = ''.join(logging.Formatter().formatException((exc_type, exc_value, exc_traceback)))
+        # Check if QApplication instance exists before showing message box
+        if QApplication.instance():
+            QMessageBox.critical(None, 'Application Error', f'An unexpected error occurred:\n{err_msg}')
+        else:
+            print(f"CRITICAL ERROR: {err_msg}", file=sys.stderr)
+
+    sys.excepthook = handle_exception
+
+    # 3. Import and show main window
+    try:
+        from gui.main_window import MainWindow
+        window = MainWindow()
+        window.show()
+        sys.exit(app.exec())
+    except Exception:
+        handle_exception(*sys.exc_info())
+        sys.exit(1)
 
 
 if __name__ == "__main__":

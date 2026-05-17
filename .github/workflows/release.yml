@@ -1,0 +1,68 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: stroke-segmentation-desktop-win64
+            asset_name: AcuteStrokeSegmentation-Windows.zip
+          - os: ubuntu-latest
+            artifact_name: stroke-segmentation-desktop-linux
+            asset_name: AcuteStrokeSegmentation-Linux.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pip install -r desktopapp/requirements.txt
+          pip install pyinstaller
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libglu1-mesa libegl1 libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinput0 libxkbcommon0 libglib2.0-0 libxcb-xkb1 libxcb-shm0 libdbus-1-3 libx11-6 libxext6 libxfixes3 libxi6 libxrender1
+          pip install -r desktopapp/requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          cd desktopapp
+          pyinstaller build.spec --clean --noconfirm
+
+      - name: Zip Artifact
+        if: runner.os == 'Windows'
+        run: |
+          cd desktopapp/dist/AcuteStrokeSegmentation
+          powershell Compress-Archive -Path * -DestinationPath ../../${{ matrix.asset_name }}
+
+      - name: Zip Artifact (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd desktopapp/dist/AcuteStrokeSegmentation
+          zip -r ../../${{ matrix.asset_name }} .
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: desktopapp/${{ matrix.asset_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

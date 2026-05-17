@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEnginePage
 from pyvistaqt import QtInteractor
-from viewer.html_viewer import build_result_html
+# from viewer.html_viewer import build_result_html
 
 from gui.workers import InferenceWorker
 from gui.dicom_viewer import DicomViewer
@@ -158,16 +158,16 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._viewer, "3D Mesh")
         
         # Tab 2: QWebEngineView for HTML/Papaya/Three.js
-        self._browser = QWebEngineView()
-        # Use custom page subclass to capture JS console messages
-        self._console_page = _ConsolePage(self._log.append, self._browser)
-        self._browser.setPage(self._console_page)
-        settings = self._browser.settings()
-        settings.setAttribute(settings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
-        settings.setAttribute(settings.WebAttribute.LocalContentCanAccessFileUrls, True)
-        settings.setAttribute(settings.WebAttribute.JavascriptEnabled, True)
+        # self._browser = QWebEngineView()
+        # # Use custom page subclass to capture JS console messages
+        # self._console_page = _ConsolePage(self._log.append, self._browser)
+        # self._browser.setPage(self._console_page)
+        # settings = self._browser.settings()
+        # settings.setAttribute(settings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        # settings.setAttribute(settings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        # settings.setAttribute(settings.WebAttribute.JavascriptEnabled, True)
         
-        self._tabs.addTab(self._browser, "Dashboard")
+        # self._tabs.addTab(self._browser, "Dashboard")
 
         # Tab 3: Native DICOM multi-planar viewer (Axial / Coronal / Sagittal)
         self._dicom_viewer = DicomViewer()
@@ -309,7 +309,7 @@ class MainWindow(QMainWindow):
         self._update_pyvista_tab()
 
         # ── 2. HTML Dashboard tab ─────────────────────────────────────────
-        self._update_html_tab()
+        # self._update_html_tab()
 
         # ── 3. Native DICOM multi-planar viewer tab ───────────────────────
         self._update_dicom_viewer_tab()
@@ -369,19 +369,19 @@ class MainWindow(QMainWindow):
         self._viewer.reset_camera()
         self._viewer.render()
 
-    def _update_html_tab(self) -> None:
-        """Build and load the HTML dashboard into QWebEngineView."""
-        # Use a run-specific temp dir so stale files from previous runs
-        # don't bleed through.
-        run_id = self._result.get("run_id", "unknown") if self._result else "unknown"
-        temp_dir = Path(tempfile.gettempdir()) / "stroke_viewer" / run_id
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            html_path = build_result_html(self._run_dir, self._result, temp_dir)
-            self._browser.setUrl(QUrl.fromLocalFile(str(html_path)))
-            self._log.append(f"Dashboard tab updated → {html_path}")
-        except Exception as exc:
-            self._log.append(f"Dashboard tab error: {exc}")
+    # def _update_html_tab(self) -> None:
+    #     """Build and load the HTML dashboard into QWebEngineView."""
+    #     # Use a run-specific temp dir so stale files from previous runs
+    #     # don't bleed through.
+    #     run_id = self._result.get("run_id", "unknown") if self._result else "unknown"
+    #     temp_dir = Path(tempfile.gettempdir()) / "stroke_viewer" / run_id
+    #     temp_dir.mkdir(parents=True, exist_ok=True)
+    #     try:
+    #         html_path = build_result_html(self._run_dir, self._result, temp_dir)
+    #         self._browser.setUrl(QUrl.fromLocalFile(str(html_path)))
+    #         self._log.append(f"Dashboard tab updated → {html_path}")
+    #     except Exception as exc:
+    #         self._log.append(f"Dashboard tab error: {exc}")
 
     def _update_dicom_viewer_tab(self) -> None:
         """Load CT and mask volumes into the native DICOM multi-planar viewer."""

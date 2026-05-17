@@ -46,23 +46,22 @@ jobs:
       - name: Build with PyInstaller
         run: |
           cd desktopapp
-          pyinstaller build.spec --clean --noconfirm
+          pyinstaller --onefile build.spec --clean --noconfirm
 
-      - name: Zip Artifact
-        if: runner.os == 'Windows'
+      - name: Prepare Asset
+        shell: bash
         run: |
-          cd desktopapp/dist/AcuteStrokeSegmentation
-          powershell Compress-Archive -Path * -DestinationPath ../../${{ matrix.asset_name }}
-
-      - name: Zip Artifact (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          cd desktopapp/dist/AcuteStrokeSegmentation
-          zip -r ../../${{ matrix.asset_name }} .
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            mv desktopapp/dist/AcuteStrokeSegmentation.exe desktopapp/AcuteStrokeSegmentation-Windows.exe
+          else
+            mv desktopapp/dist/AcuteStrokeSegmentation desktopapp/AcuteStrokeSegmentation-Linux
+          fi
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: desktopapp/${{ matrix.asset_name }}
+          files: |
+            desktopapp/AcuteStrokeSegmentation-Windows.exe
+            desktopapp/AcuteStrokeSegmentation-Linux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -92,6 +92,7 @@ class _SliceCanvas(QLabel):
         self._cy: float = 0.5   # crosshair y (normalised)
         self._overlay_alpha: float = 0.45
         self._show_crosshair: bool = True
+        self._pixel_aspect: float = 1.0  # (dim1_spacing / dim2_spacing)
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setMinimumSize(200, 200)
@@ -109,10 +110,12 @@ class _SliceCanvas(QLabel):
         self,
         ct: Optional[np.ndarray],
         mask: Optional[np.ndarray],
+        aspect: float = 1.0,
     ) -> None:
         """Update the displayed CT and mask slices (2-D arrays)."""
         self._ct_slice = ct
         self._mask_slice = mask
+        self._pixel_aspect = aspect
         self._render()
 
     def set_crosshair(self, cx: float, cy: float) -> None:
@@ -192,8 +195,14 @@ class _SliceCanvas(QLabel):
         # Scale to fit label while keeping aspect ratio
         lw, lh = self.width(), self.height()
         if lw > 0 and lh > 0:
+            # Apply aspect ratio adjustment:
+            # If self._pixel_aspect > 1, the vertical dimension is effectively 'stretched'
+            # relative to horizontal.
+            target_w = lw
+            target_h = int(lh * self._pixel_aspect)
+            
             pm = pm.scaled(
-                lw, lh,
+                target_w, target_h,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
@@ -535,7 +544,9 @@ class DicomViewer(QWidget):
             return
         ct_sl = self._ct[self._iz]
         mask_sl = self._mask[self._iz] if self._mask is not None else None
-        self._axial.set_slices(ct_sl, mask_sl)
+        # Axial: spacing is (dx, dy), ratio sx/sy
+        aspect = self._spacing[2] / self._spacing[1]
+        self._axial.set_slices(ct_sl, mask_sl, aspect=aspect)
 
     def _refresh_coronal(self) -> None:
         if self._ct is None:
@@ -544,7 +555,9 @@ class DicomViewer(QWidget):
         mask_sl = (
             self._mask[:, self._iy, :] if self._mask is not None else None
         )
-        self._coronal.set_slices(ct_sl, mask_sl)
+        # Coronal: spacing is (dz, dx), ratio sz/sx
+        aspect = self._spacing[0] / self._spacing[2]
+        self._coronal.set_slices(ct_sl, mask_sl, aspect=aspect)
 
     def _refresh_sagittal(self) -> None:
         if self._ct is None:
@@ -553,7 +566,9 @@ class DicomViewer(QWidget):
         mask_sl = (
             self._mask[:, :, self._ix] if self._mask is not None else None
         )
-        self._sagittal.set_slices(ct_sl, mask_sl)
+        # Sagittal: spacing is (dz, dy), ratio sz/sy
+        aspect = self._spacing[0] / self._spacing[1]
+        self._sagittal.set_slices(ct_sl, mask_sl, aspect=aspect)
 
     def _refresh_all(self) -> None:
         self._refresh_axial()

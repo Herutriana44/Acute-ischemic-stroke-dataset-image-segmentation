@@ -32,11 +32,17 @@ jobs:
           pyinstaller build.spec --clean --noconfirm
         shell: bash
 
+      - name: Archive production artifacts
+        run: |
+          cd desktopapp/dist
+          zip -r ../../stroke-segmentation-win64.zip AcuteStrokeSegmentation
+        shell: bash
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: stroke-segmentation-desktop-win64
-          path: desktopapp/dist/AcuteStrokeSegmentation/
+          path: stroke-segmentation-win64.zip
           retention-days: 30
 
   build-linux:
@@ -77,9 +83,15 @@ jobs:
           pyinstaller build.spec --clean --noconfirm
         shell: bash
 
+      - name: Archive production artifacts
+        run: |
+          cd desktopapp/dist
+          zip -r ../../stroke-segmentation-linux.zip AcuteStrokeSegmentation
+        shell: bash
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: stroke-segmentation-desktop-linux
-          path: desktopapp/dist/AcuteStrokeSegmentation/
+          path: stroke-segmentation-linux.zip
           retention-days: 30

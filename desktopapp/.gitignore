@@ -1,3 +1,5 @@
 runs/
+dist/
+build/
 desktopapp_gui.log
 desktopapp.log

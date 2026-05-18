@@ -35,7 +35,7 @@ jobs:
       - name: Archive production artifacts
         shell: powershell
         run: |
-          $source = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation"
+          $source = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation.exe"
           $destination = Join-Path $env:GITHUB_WORKSPACE "stroke-segmentation-win64.zip"
           Compress-Archive -Path $source -DestinationPath $destination
 

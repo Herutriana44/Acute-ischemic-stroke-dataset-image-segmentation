@@ -157,18 +157,12 @@ class MainWindow(QMainWindow):
         self._viewer.setMinimumSize(QSize(600, 500))
         self._tabs.addTab(self._viewer, "3D Mesh")
         
-        # Tab 2: QWebEngineView for HTML/Papaya/Three.js
-        # self._browser = QWebEngineView()
-        # # Use custom page subclass to capture JS console messages
-        # self._console_page = _ConsolePage(self._log.append, self._browser)
-        # self._browser.setPage(self._console_page)
-        # settings = self._browser.settings()
-        # settings.setAttribute(settings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
-        # settings.setAttribute(settings.WebAttribute.LocalContentCanAccessFileUrls, True)
-        # settings.setAttribute(settings.WebAttribute.JavascriptEnabled, True)
+        # Tab 2: 2D Image Viewer
+        self._image_viewer = QLabel("Load an image to see results.")
+        self._image_viewer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._image_viewer.setMinimumSize(QSize(600, 500))
+        self._tabs.addTab(self._image_viewer, "2D Result")
         
-        # self._tabs.addTab(self._browser, "Dashboard")
-
         # Tab 3: Native DICOM multi-planar viewer (Axial / Coronal / Sagittal)
         self._dicom_viewer = DicomViewer()
         self._tabs.addTab(self._dicom_viewer, "DICOM Viewer")
@@ -305,14 +299,34 @@ class MainWindow(QMainWindow):
         if not self._run_dir or not self._result:
             return
 
-        # ── 1. PyVista 3D Mesh tab ────────────────────────────────────────
-        self._update_pyvista_tab()
+        is_3d = self._result.get("enable_3d", False)
 
-        # ── 2. HTML Dashboard tab ─────────────────────────────────────────
-        # self._update_html_tab()
+        # Tab visibility
+        self._tabs.setTabVisible(0, is_3d) # 3D Mesh
+        self._tabs.setTabVisible(2, is_3d) # DICOM Viewer
 
-        # ── 3. Native DICOM multi-planar viewer tab ───────────────────────
-        self._update_dicom_viewer_tab()
+        if is_3d:
+            # ── 1. PyVista 3D Mesh tab ────────────────────────────────────────
+            self._update_pyvista_tab()
+            # ── 3. Native DICOM multi-planar viewer tab ───────────────────────
+            self._update_dicom_viewer_tab()
+            self._tabs.setCurrentIndex(0)
+        else:
+            # ── 2. 2D Image Viewer tab ─────────────────────────────────────────
+            self._update_2d_viewer_tab()
+            self._tabs.setCurrentIndex(1)
+
+    def _update_2d_viewer_tab(self) -> None:
+        """Load 2D overlay result into the QLabel."""
+        from PyQt6.QtGui import QPixmap
+        overlay_path = self._run_dir / self._result.get("overlay_png", "overlay.png")
+        if overlay_path.exists():
+            pixmap = QPixmap(str(overlay_path))
+            self._image_viewer.setPixmap(pixmap.scaled(self._image_viewer.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            self._log.append(f"2D Viewer: loaded {overlay_path.name}")
+        else:
+            self._image_viewer.setText("Overlay image not found.")
+            self._log.append("2D Viewer error: overlay image not found.")
 
     def _update_pyvista_tab(self) -> None:
         """Load DICOM-derived OBJ meshes into the PyVista QtInteractor."""

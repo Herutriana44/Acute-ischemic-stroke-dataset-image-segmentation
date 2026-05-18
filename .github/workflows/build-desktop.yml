@@ -1,4 +1,4 @@
-name: Build Desktop App (.exe)
+name: Windows Winlator Friendly App
 
 on:
   push:
@@ -7,8 +7,10 @@ on:
 
 jobs:
   build-windows:
-    name: Build Windows .exe
+    name: Build Windows Standard (.exe)
     runs-on: windows-latest
+    env:
+      PYINSTALLER_ONEFILE: 'true'
 
     steps:
       - name: Checkout repository
@@ -49,6 +51,8 @@ jobs:
   build-linux:
     name: Build Linux binary
     runs-on: ubuntu-latest
+    env:
+      PYINSTALLER_ONEFILE: 'true'
 
     steps:
       - name: Checkout repository
@@ -95,4 +99,46 @@ jobs:
         with:
           name: stroke-segmentation-desktop-linux
           path: stroke-segmentation-linux.zip
+          retention-days: 30
+
+  build-winlator:
+    name: Build Windows Winlator Friendly (Portable Folder)
+    runs-on: windows-latest
+    env:
+      PYINSTALLER_ONEFILE: 'false'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r desktopapp/requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          cd desktopapp
+          pyinstaller build.spec --clean --noconfirm
+        shell: bash
+
+      - name: Archive production artifacts
+        shell: powershell
+        run: |
+          $source = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation"
+          $destination = Join-Path $env:GITHUB_WORKSPACE "stroke-segmentation-winlator.zip"
+          Compress-Archive -Path $source -DestinationPath $destination
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stroke-segmentation-desktop-winlator
+          path: stroke-segmentation-winlator.zip
           retention-days: 30

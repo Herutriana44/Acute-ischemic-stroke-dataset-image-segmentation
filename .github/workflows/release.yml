@@ -13,11 +13,19 @@ jobs:
           - os: windows-latest
             artifact_name: stroke-segmentation-desktop-win64
             asset_name: AcuteStrokeSegmentation-Windows.zip
+            onefile: 'true'
+          - os: windows-latest
+            artifact_name: stroke-segmentation-desktop-winlator
+            asset_name: AcuteStrokeSegmentation-Winlator-Portable.zip
+            onefile: 'false'
           - os: ubuntu-latest
             artifact_name: stroke-segmentation-desktop-linux
             asset_name: AcuteStrokeSegmentation-Linux.zip
+            onefile: 'true'
 
     runs-on: ${{ matrix.os }}
+    env:
+      PYINSTALLER_ONEFILE: ${{ matrix.onefile }}
 
     steps:
       - name: Checkout repository
@@ -46,22 +54,35 @@ jobs:
       - name: Build with PyInstaller
         run: |
           cd desktopapp
-          pyinstaller --onefile build.spec --clean --noconfirm
+          pyinstaller build.spec --clean --noconfirm
+        shell: bash
 
-      - name: Prepare Asset
+      - name: Prepare and Zip Asset (Windows One-File)
+        if: matrix.os == 'windows-latest' && matrix.onefile == 'true'
+        shell: powershell
+        run: |
+          $source = "desktopapp\dist\AcuteStrokeSegmentation.exe"
+          $destination = "${{ matrix.asset_name }}"
+          Compress-Archive -Path $source -DestinationPath $destination
+
+      - name: Prepare and Zip Asset (Windows One-Dir / Winlator)
+        if: matrix.os == 'windows-latest' && matrix.onefile == 'false'
+        shell: powershell
+        run: |
+          $source = "desktopapp\dist\AcuteStrokeSegmentation"
+          $destination = "${{ matrix.asset_name }}"
+          Compress-Archive -Path $source -DestinationPath $destination
+
+      - name: Prepare and Zip Asset (Linux)
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            mv desktopapp/dist/AcuteStrokeSegmentation.exe desktopapp/AcuteStrokeSegmentation-Windows.exe
-          else
-            mv desktopapp/dist/AcuteStrokeSegmentation desktopapp/AcuteStrokeSegmentation-Linux
-          fi
+          cd desktopapp/dist
+          zip -r ../../${{ matrix.asset_name }} AcuteStrokeSegmentation
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            desktopapp/AcuteStrokeSegmentation-Windows.exe
-            desktopapp/AcuteStrokeSegmentation-Linux
+          files: ${{ matrix.asset_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

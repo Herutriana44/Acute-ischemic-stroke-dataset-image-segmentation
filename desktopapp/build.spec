@@ -52,6 +52,9 @@ hiddenimports = [
     "pathlib",
 ]
 
+# Check for environment variable to determine build mode
+onefile = os.environ.get('PYINSTALLER_ONEFILE', 'True').lower() == 'true'
+
 # Analysis
 a = Analysis(
     [os.path.join(SPECPATH, "main.py")],
@@ -69,22 +72,53 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    name="AcuteStrokeSegmentation",
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=os.path.join(SPECPATH, "resources", "icon.ico") if os.path.exists(os.path.join(SPECPATH, "resources", "icon.ico")) else None,
-)
+if onefile:
+    exe = EXE(
+        pyz,
+        a.scripts,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        name="AcuteStrokeSegmentation",
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=True,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon=os.path.join(SPECPATH, "resources", "icon.ico") if os.path.exists(os.path.join(SPECPATH, "resources", "icon.ico")) else None,
+    )
+else:
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        [],
+        [],
+        name="AcuteStrokeSegmentation",
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=True,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon=os.path.join(SPECPATH, "resources", "icon.ico") if os.path.exists(os.path.join(SPECPATH, "resources", "icon.ico")) else None,
+    )
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name="AcuteStrokeSegmentation",
+    )

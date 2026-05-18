@@ -35,8 +35,9 @@ jobs:
       - name: Archive production artifacts
         shell: powershell
         run: |
-          Set-Location desktopapp/dist
-          Compress-Archive -Path "AcuteStrokeSegmentation/*" -DestinationPath "../../stroke-segmentation-win64.zip"
+          $source = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation"
+          $destination = Join-Path $env:GITHUB_WORKSPACE "stroke-segmentation-win64.zip"
+          Compress-Archive -Path $source -DestinationPath $destination
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

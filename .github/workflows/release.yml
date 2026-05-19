@@ -16,7 +16,7 @@ jobs:
             onefile: 'true'
           - os: windows-latest
             artifact_name: stroke-segmentation-desktop-winlator
-            asset_name: AcuteStrokeSegmentation-Winlator-Portable.zip
+            asset_name: AcuteStrokeSegmentation-Winlator-Portable.tar.gz
             onefile: 'false'
           - os: ubuntu-latest
             artifact_name: stroke-segmentation-desktop-linux
@@ -65,14 +65,12 @@ jobs:
           $destination = "${{ matrix.asset_name }}"
           Compress-Archive -Path $source -DestinationPath $destination -Force
 
-      - name: Prepare and Zip Asset (Windows One-Dir / Winlator)
+      - name: Prepare and Tar Asset (Windows One-Dir / Winlator)
         if: matrix.os == 'windows-latest' && matrix.onefile == 'false'
-        shell: powershell
+        shell: bash
         run: |
-          $source = "desktopapp\dist\AcuteStrokeSegmentation"
-          $destination = "${{ matrix.asset_name }}"
-          $files = Get-ChildItem -Path $source
-          Compress-Archive -Path $files.FullName -DestinationPath $destination -Force
+          cd desktopapp/dist
+          tar -czvf ../../${{ matrix.asset_name }} AcuteStrokeSegmentation
 
       - name: Prepare and Zip Asset (Linux)
         if: matrix.os == 'ubuntu-latest'

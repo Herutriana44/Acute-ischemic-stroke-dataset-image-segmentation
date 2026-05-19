@@ -130,16 +130,14 @@ jobs:
         shell: bash
 
       - name: Archive production artifacts
-        shell: powershell
+        shell: bash
         run: |
-          $source = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation"
-          $destination = Join-Path $env:GITHUB_WORKSPACE "stroke-segmentation-winlator.zip"
-          $files = Get-ChildItem -Path $source
-          Compress-Archive -Path $files.FullName -DestinationPath $destination -Force
+          cd desktopapp/dist
+          tar -czvf ../../stroke-segmentation-winlator.tar.gz AcuteStrokeSegmentation
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: stroke-segmentation-desktop-winlator
-          path: stroke-segmentation-winlator.zip
+          path: stroke-segmentation-winlator.tar.gz
           retention-days: 30

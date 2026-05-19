@@ -63,7 +63,7 @@ jobs:
         run: |
           $source = "desktopapp\dist\AcuteStrokeSegmentation.exe"
           $destination = "${{ matrix.asset_name }}"
-          Compress-Archive -Path $source -DestinationPath $destination
+          Compress-Archive -Path $source -DestinationPath $destination -Force
 
       - name: Prepare and Zip Asset (Windows One-Dir / Winlator)
         if: matrix.os == 'windows-latest' && matrix.onefile == 'false'
@@ -71,7 +71,8 @@ jobs:
         run: |
           $source = "desktopapp\dist\AcuteStrokeSegmentation"
           $destination = "${{ matrix.asset_name }}"
-          Compress-Archive -Path $source -DestinationPath $destination
+          $files = Get-ChildItem -Path $source
+          Compress-Archive -Path $files.FullName -DestinationPath $destination -Force
 
       - name: Prepare and Zip Asset (Linux)
         if: matrix.os == 'ubuntu-latest'

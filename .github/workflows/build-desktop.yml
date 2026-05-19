@@ -39,7 +39,8 @@ jobs:
         run: |
           $source = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation.exe"
           $destination = Join-Path $env:GITHUB_WORKSPACE "stroke-segmentation-win64.zip"
-          Compress-Archive -Path $source -DestinationPath $destination
+          # Use 7zip if available, or simpler logic if not. For now, rely on standard zip
+          Compress-Archive -Path $source -DestinationPath $destination -Force
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -134,9 +135,9 @@ jobs:
         run: |
           $source = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation"
           $destination = Join-Path $env:GITHUB_WORKSPACE "stroke-segmentation-winlator.zip"
-          Compress-Archive -Path $source -DestinationPath $destination
-
-      - name: Upload build artifact
+          # Get all items inside the directory to avoid parent folder permission issues
+          $files = Get-ChildItem -Path $source
+          Compress-Archive -Path $files.FullName -DestinationPath $destination -Force
         uses: actions/upload-artifact@v4
         with:
           name: stroke-segmentation-desktop-winlator

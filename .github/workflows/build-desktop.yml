@@ -133,11 +133,11 @@ jobs:
         shell: bash
         run: |
           cd desktopapp/dist
-          tar -czvf ../../stroke-segmentation-winlator.tar.gz AcuteStrokeSegmentation
+          7z a ../../stroke-segmentation-winlator.7z AcuteStrokeSegmentation
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: stroke-segmentation-desktop-winlator
-          path: stroke-segmentation-winlator.tar.gz
+          path: stroke-segmentation-winlator.7z
           retention-days: 30

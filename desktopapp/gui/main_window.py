@@ -167,6 +167,12 @@ class MainWindow(QMainWindow):
         self._dicom_viewer = DicomViewer()
         self._tabs.addTab(self._dicom_viewer, "DICOM Viewer")
         
+        # Tab 4: 3D Anatomy (GLTF Viewer)
+        self._gltf_viewer = QWebEngineView()
+        gltf_viewer_path = Path(__file__).parent.parent / "viewer" / "model_viewer.html"
+        self._gltf_viewer.setUrl(QUrl.fromLocalFile(str(gltf_viewer_path.absolute())))
+        self._tabs.addTab(self._gltf_viewer, "3D Anatomy")
+        
         splitter.addWidget(self._tabs)
         splitter.setStretchFactor(1, 1)
         layout.addWidget(splitter)

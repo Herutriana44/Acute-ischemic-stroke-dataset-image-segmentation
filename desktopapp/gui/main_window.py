@@ -149,31 +149,20 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self._log)
         splitter.addWidget(left)
 
-        # Right: Tabbed viewer (3D + Dashboard)
-        self._tabs = QTabWidget()
+        # Right: Viewer Area (3D Mesh + DICOM Viewer side-by-side)
+        self._viewer_container = QSplitter(Qt.Orientation.Horizontal)
         
-        # Tab 1: PyVista QtInteractor
+        # 1. PyVista QtInteractor
         self._viewer = QtInteractor(self)
-        self._viewer.setMinimumSize(QSize(600, 500))
-        self._tabs.addTab(self._viewer, "3D Mesh")
+        self._viewer.setMinimumSize(QSize(400, 500))
+        self._viewer_container.addWidget(self._viewer)
         
-        # Tab 2: 2D Image Viewer
-        self._image_viewer = QLabel("Load an image to see results.")
-        self._image_viewer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._image_viewer.setMinimumSize(QSize(600, 500))
-        self._tabs.addTab(self._image_viewer, "2D Result")
-        
-        # Tab 3: Native DICOM multi-planar viewer (Axial / Coronal / Sagittal)
+        # 2. Native DICOM multi-planar viewer (Axial / Coronal / Sagittal)
         self._dicom_viewer = DicomViewer()
-        self._tabs.addTab(self._dicom_viewer, "DICOM Viewer")
+        self._dicom_viewer.setMinimumSize(QSize(400, 500))
+        self._viewer_container.addWidget(self._dicom_viewer)
         
-        # Tab 4: 3D Anatomy (GLTF Viewer)
-        self._gltf_viewer = QWebEngineView()
-        gltf_viewer_path = Path(__file__).parent.parent / "viewer" / "model_viewer.html"
-        self._gltf_viewer.setUrl(QUrl.fromLocalFile(str(gltf_viewer_path.absolute())))
-        self._tabs.addTab(self._gltf_viewer, "3D Anatomy")
-        
-        splitter.addWidget(self._tabs)
+        splitter.addWidget(self._viewer_container)
         splitter.setStretchFactor(1, 1)
         layout.addWidget(splitter)
 
@@ -301,38 +290,21 @@ class MainWindow(QMainWindow):
         self._display_viewer()
 
     def _display_viewer(self) -> None:
-        """Display results using both PyVista (3D Mesh tab) and HTML (Dashboard tab)."""
+        """Display results using both PyVista (3D Mesh) and DICOM Viewer."""
         if not self._run_dir or not self._result:
             return
 
         is_3d = self._result.get("enable_3d", False)
-
-        # Tab visibility
-        self._tabs.setTabVisible(0, is_3d) # 3D Mesh
-        self._tabs.setTabVisible(2, is_3d) # DICOM Viewer
+        self._viewer_container.setVisible(is_3d)
 
         if is_3d:
-            # ── 1. PyVista 3D Mesh tab ────────────────────────────────────────
+            # ── 1. PyVista 3D Mesh ────────────────────────────────────────
             self._update_pyvista_tab()
-            # ── 3. Native DICOM multi-planar viewer tab ───────────────────────
+            # ── 2. Native DICOM multi-planar viewer ───────────────────────
             self._update_dicom_viewer_tab()
-            self._tabs.setCurrentIndex(0)
         else:
-            # ── 2. 2D Image Viewer tab ─────────────────────────────────────────
-            self._update_2d_viewer_tab()
-            self._tabs.setCurrentIndex(1)
-
-    def _update_2d_viewer_tab(self) -> None:
-        """Load 2D overlay result into the QLabel."""
-        from PyQt6.QtGui import QPixmap
-        overlay_path = self._run_dir / self._result.get("overlay_png", "overlay.png")
-        if overlay_path.exists():
-            pixmap = QPixmap(str(overlay_path))
-            self._image_viewer.setPixmap(pixmap.scaled(self._image_viewer.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            self._log.append(f"2D Viewer: loaded {overlay_path.name}")
-        else:
-            self._image_viewer.setText("Overlay image not found.")
-            self._log.append("2D Viewer error: overlay image not found.")
+            # 2D mode logic if needed
+            self._log.append("Only 3D DICOM mode supported in this view.")
 
     def _update_pyvista_tab(self) -> None:
         """Load DICOM-derived OBJ meshes into the PyVista QtInteractor."""
@@ -347,16 +319,12 @@ class MainWindow(QMainWindow):
                 brain_mesh = pv.read(str(brain_obj_path))
                 self._viewer.add_mesh(
                     brain_mesh,
-                    color="#bcc8da",   # blue-gray, matches HTML viewer
+                    color="#bcc8da",   # blue-gray
                     opacity=0.30,
                     label="CT Brain Surface",
                     smooth_shading=True,
                 )
                 loaded_any = True
-                self._log.append(
-                    f"3D Mesh: loaded brain.obj "
-                    f"({brain_mesh.n_points} pts, {brain_mesh.n_cells} faces)"
-                )
             except Exception as exc:
                 self._log.append(f"3D Mesh: could not load brain.obj — {exc}")
 
@@ -366,42 +334,23 @@ class MainWindow(QMainWindow):
                 lesion_mesh = pv.read(str(lesion_obj_path))
                 self._viewer.add_mesh(
                     lesion_mesh,
-                    color="#ea580c",   # orange, matches HTML viewer
+                    color="#ea580c",   # orange
                     opacity=0.85,
                     label="Ischemic Lesion",
                     smooth_shading=True,
                 )
                 loaded_any = True
-                self._log.append(
-                    f"3D Mesh: loaded lesion.obj "
-                    f"({lesion_mesh.n_points} pts, {lesion_mesh.n_cells} faces)"
-                )
             except Exception as exc:
                 self._log.append(f"3D Mesh: could not load lesion.obj — {exc}")
 
         if not loaded_any:
-            self._log.append("3D Mesh: no OBJ files found (single-image mode or no lesion).")
+            self._log.append("3D Mesh: no OBJ files found.")
 
-        # Axes, legend, camera
         self._viewer.add_axes()
         if loaded_any:
             self._viewer.add_legend()
         self._viewer.reset_camera()
         self._viewer.render()
-
-    # def _update_html_tab(self) -> None:
-    #     """Build and load the HTML dashboard into QWebEngineView."""
-    #     # Use a run-specific temp dir so stale files from previous runs
-    #     # don't bleed through.
-    #     run_id = self._result.get("run_id", "unknown") if self._result else "unknown"
-    #     temp_dir = Path(tempfile.gettempdir()) / "stroke_viewer" / run_id
-    #     temp_dir.mkdir(parents=True, exist_ok=True)
-    #     try:
-    #         html_path = build_result_html(self._run_dir, self._result, temp_dir)
-    #         self._browser.setUrl(QUrl.fromLocalFile(str(html_path)))
-    #         self._log.append(f"Dashboard tab updated → {html_path}")
-    #     except Exception as exc:
-    #         self._log.append(f"Dashboard tab error: {exc}")
 
     def _update_dicom_viewer_tab(self) -> None:
         """Load CT and mask volumes into the native DICOM multi-planar viewer."""
@@ -412,7 +361,7 @@ class MainWindow(QMainWindow):
 
         # Only available for DICOM (3-D) runs
         if not result.get("enable_3d"):
-            self._log.append("DICOM Viewer: not available for single-image mode.")
+            self._log.append("DICOM Viewer: not available.")
             self._dicom_viewer.clear()
             return
 
@@ -424,10 +373,9 @@ class MainWindow(QMainWindow):
             mask_npy = self._run_dir / "mask_pred.npy"
 
             if hu_npy.exists() and mask_npy.exists():
-                ct_vol = np.load(str(hu_npy))   # raw HU, shape (Z, Y, X)
+                ct_vol = np.load(str(hu_npy))
                 mask_vol = np.load(str(mask_npy))
                 use_hu = True
-                self._log.append("DICOM Viewer: loaded volumes from .npy cache.")
             else:
                 # Fall back to windowed NIfTI
                 import nibabel as nib
@@ -442,7 +390,6 @@ class MainWindow(QMainWindow):
 
                 ct_img = nib.load(str(ct_nii_path))
                 ct_vol = np.asarray(ct_img.dataobj, dtype=np.float32)
-                # NIfTI from inference is stored as (Y, X, Z) → transpose to (Z, Y, X)
                 if ct_vol.ndim == 3:
                     ct_vol = ct_vol.transpose(2, 0, 1)
 
@@ -454,10 +401,8 @@ class MainWindow(QMainWindow):
                         mask_vol = mask_vol.transpose(2, 0, 1)
 
                 use_hu = "hu" in ct_nii_name.lower()
-                self._log.append("DICOM Viewer: loaded volumes from NIfTI.")
 
             spacing_raw = result.get("spacing", [1.0, 1.0, 1.0])
-            # spacing from inference is [ps_row, ps_col, ps_z]
             spacing = (
                 float(spacing_raw[2]),  # z
                 float(spacing_raw[0]),  # y (row)
@@ -467,10 +412,7 @@ class MainWindow(QMainWindow):
             self._dicom_viewer.load_volumes(
                 ct_vol, mask_vol, spacing=spacing, use_hu=use_hu
             )
-            self._log.append(
-                f"DICOM Viewer: loaded {ct_vol.shape} volume, "
-                f"spacing={spacing[0]:.3f}×{spacing[1]:.3f}×{spacing[2]:.3f} mm"
-            )
+            self._log.append(f"DICOM Viewer: loaded volume {ct_vol.shape}")
 
         except Exception as exc:
             import traceback

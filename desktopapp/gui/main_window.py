@@ -83,9 +83,9 @@ class MainWindow(QMainWindow):
             file_handler.setFormatter(formatter)
             self._logger.addHandler(file_handler)
         # Redirect stdout/stderr to QTextEdit and logger
-        self._log_stream = EmittingStream(self._log, self._logger.debug)
-        sys.stdout = self._log_stream
-        sys.stderr = self._log_stream
+        # self._log_stream = EmittingStream(self._log, self._logger.debug)
+        # sys.stdout = self._log_stream
+        # sys.stderr = self._log_stream
         self._run_dir: Path | None = None
         self._result: dict | None = None
 
@@ -136,18 +136,18 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Left: metrics + log
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
-        self._metrics_label = QLabel("<h3>Metrics</h3><p>Load data to start.</p>")
-        self._metrics_label.setWordWrap(True)
-        left_layout.addWidget(self._metrics_label)
+        # left = QWidget()
+        # left_layout = QVBoxLayout(left)
+        # self._metrics_label = QLabel("<h3>Metrics</h3><p>Load data to start.</p>")
+        # self._metrics_label.setWordWrap(True)
+        # left_layout.addWidget(self._metrics_label)
 
-        self._log = QTextEdit()
-        self._log.setReadOnly(True)
-        self._log.setMaximumHeight(200)
-        left_layout.addWidget(QLabel("<b>Log</b>"))
-        left_layout.addWidget(self._log)
-        splitter.addWidget(left)
+        # self._log = QTextEdit()
+        # self._log.setReadOnly(True)
+        # self._log.setMaximumHeight(200)
+        # left_layout.addWidget(QLabel("<b>Log</b>"))
+        # left_layout.addWidget(self._log)
+        # splitter.addWidget(left)
 
         # Right: Viewer Area (3D Mesh + DICOM Viewer side-by-side)
         self._viewer_container = QSplitter(Qt.Orientation.Horizontal)
@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
         self._run_inference_image(Path(file_path))
 
     def _run_inference_dicom(self, archive_path: Path) -> None:
-        self._log.append(f"Loading DICOM archive: {archive_path.name}")
+        # self._log.append(f"Loading DICOM archive: {archive_path.name}")
         self._status_label.setText("Processing DICOM series…")
         self._progress.setVisible(True)
         self._btn_view.setEnabled(False)
@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
         self._worker.start()
 
     def _run_inference_image(self, image_path: Path) -> None:
-        self._log.append(f"Loading image: {image_path.name}")
+        # self._log.append(f"Loading image: {image_path.name}")
         self._status_label.setText("Processing image…")
         self._progress.setVisible(True)
         self._btn_view.setEnabled(False)
@@ -251,23 +251,24 @@ class MainWindow(QMainWindow):
         self._worker.start()
 
     def _on_progress(self, msg: str) -> None:
-        self._log.append(msg)
+        # self._log.append(msg)
+        print(msg)
 
     def _on_inference_done(self, run_dir: Path, result: dict) -> None:
         self._progress.setVisible(False)
         self._run_dir = run_dir
         self._result = result
         self._status_label.setText("Inference complete.")
-        self._log.append("Inference complete.")
+        # self._log.append("Inference complete.")
         self._btn_view.setEnabled(True)
         self._btn_save.setEnabled(True)
-        self._update_metrics()
+        # self._update_metrics()
         self._view_results()
 
     def _on_inference_error(self, msg: str) -> None:
         self._progress.setVisible(False)
         self._status_label.setText("Error.")
-        self._log.append(f"ERROR: {msg}")
+        # self._log.append(f"ERROR: {msg}")
         QMessageBox.critical(self, "Inference Error", msg)
 
     def _update_metrics(self) -> None:
@@ -304,7 +305,8 @@ class MainWindow(QMainWindow):
             self._update_dicom_viewer_tab()
         else:
             # 2D mode logic if needed
-            self._log.append("Only 3D DICOM mode supported in this view.")
+            # self._log.append("Only 3D DICOM mode supported in this view.")
+            print("Only 3D DICOM mode supported in this view.")
 
     def _update_pyvista_tab(self) -> None:
         """Load DICOM-derived OBJ meshes into the PyVista QtInteractor."""
@@ -326,7 +328,8 @@ class MainWindow(QMainWindow):
                 )
                 loaded_any = True
             except Exception as exc:
-                self._log.append(f"3D Mesh: could not load brain.obj — {exc}")
+                # self._log.append(f"3D Mesh: could not load brain.obj — {exc}")
+                print(f"3D Mesh: could not load brain.obj — {exc}")
 
         lesion_obj_path = self._run_dir / "lesion.obj"
         if lesion_obj_path.exists():
@@ -341,10 +344,12 @@ class MainWindow(QMainWindow):
                 )
                 loaded_any = True
             except Exception as exc:
-                self._log.append(f"3D Mesh: could not load lesion.obj — {exc}")
+                # self._log.append(f"3D Mesh: could not load lesion.obj — {exc}")
+                print(f"3D Mesh: could not load lesion.obj — {exc}")
 
         if not loaded_any:
-            self._log.append("3D Mesh: no OBJ files found.")
+            # self._log.append("3D Mesh: no OBJ files found.")
+            print("3D Mesh: no OBJ files found.")
 
         self._viewer.add_axes()
         if loaded_any:
@@ -361,7 +366,7 @@ class MainWindow(QMainWindow):
 
         # Only available for DICOM (3-D) runs
         if not result.get("enable_3d"):
-            self._log.append("DICOM Viewer: not available.")
+            # self._log.append("DICOM Viewer: not available.")
             self._dicom_viewer.clear()
             return
 
@@ -385,7 +390,8 @@ class MainWindow(QMainWindow):
                 mask_nii_path = self._run_dir / mask_nii_name if mask_nii_name else None
 
                 if ct_nii_path is None or not ct_nii_path.exists():
-                    self._log.append("DICOM Viewer: CT NIfTI not found.")
+                    # self._log.append("DICOM Viewer: CT NIfTI not found.")
+                    print("DICOM Viewer: CT NIfTI not found.")
                     return
 
                 ct_img = nib.load(str(ct_nii_path))
@@ -412,11 +418,12 @@ class MainWindow(QMainWindow):
             self._dicom_viewer.load_volumes(
                 ct_vol, mask_vol, spacing=spacing, use_hu=use_hu
             )
-            self._log.append(f"DICOM Viewer: loaded volume {ct_vol.shape}")
+            # self._log.append(f"DICOM Viewer: loaded volume {ct_vol.shape}")
 
         except Exception as exc:
             import traceback
-            self._log.append(f"DICOM Viewer error: {exc}")
+            # self._log.append(f"DICOM Viewer error: {exc}")
+            print(f"DICOM Viewer error: {exc}")
             traceback.print_exc()
 
     def _save_results(self) -> None:
@@ -429,7 +436,8 @@ class MainWindow(QMainWindow):
         if dest_path.exists():
             shutil.rmtree(dest_path)
         shutil.copytree(self._run_dir, dest_path)
-        self._log.append(f"Results saved to: {dest_path}")
+        # self._log.append(f"Results saved to: {dest_path}")
+        print(f"Results saved to: {dest_path}")
         QMessageBox.information(self, "Saved", f"Results saved to:\n{dest_path}")
 
     def _show_about(self) -> None:

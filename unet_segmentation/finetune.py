@@ -82,6 +82,7 @@ def main() -> int:
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs, 1))
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"DEBUG: Directory checkpoint: {args.out_dir.resolve()}")
     best_path = args.out_dir / "best_finetuned_unet.pt"
     best_dice = ckpt.get("metrics", {}).get("slice_level_dice", 0.0)
     print(f"Starting fine-tuning from dice: {best_dice:.4f}")
@@ -92,12 +93,19 @@ def main() -> int:
         metrics = evaluate(model, val_loader, device)
         sched.step()
 
-        print(f"Epoch {epoch}/{args.epochs}  loss={loss_tr:.4f}  dice={metrics['slice_level_dice']:.4f}")
+        current_dice = metrics['slice_level_dice']
+        print(f"Epoch {epoch}/{args.epochs}  loss={loss_tr:.4f}  dice={current_dice:.4f}")
         
-        if metrics["slice_level_dice"] > best_dice:
-            best_dice = metrics["slice_level_dice"]
+        # Simpan selalu checkpoint terakhir sebagai backup
+        last_path = args.out_dir / "last_finetuned_unet.pt"
+        torch.save({"model_state": model.state_dict(), "encoder": encoder, "metrics": metrics}, last_path)
+        
+        if current_dice > best_dice:
+            print(f"  Dice meningkat ({best_dice:.4f} -> {current_dice:.4f}). Menyimpan checkpoint terbaik.")
+            best_dice = current_dice
             torch.save({"model_state": model.state_dict(), "encoder": encoder, "metrics": metrics}, best_path)
-            print(f"  (simpan checkpoint baru -> {best_path})")
+        else:
+            print(f"  Dice tidak meningkat (best: {best_dice:.4f}).")
 
     return 0
 

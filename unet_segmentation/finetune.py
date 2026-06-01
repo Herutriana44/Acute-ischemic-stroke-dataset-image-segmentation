@@ -57,6 +57,11 @@ def main() -> int:
     # 2. Build Model
     model = build_model(encoder, pretrained=False) # Kita load weights sendiri
     model.load_state_dict(ckpt["model_state"])
+    
+    # FREEZING ENCODER
+    for param in model.encoder.parameters():
+        param.requires_grad = False
+    
     model.to(device)
     
     # 3. Setup Dataset/Loader
@@ -78,7 +83,7 @@ def main() -> int:
         
     dice_loss = smp.losses.DiceLoss(mode="binary", from_logits=True)
     bce_loss = nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-6, weight_decay=1e-4) # LR disesuaikan
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs, 1))
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -86,6 +91,10 @@ def main() -> int:
     best_path = args.out_dir / "best_finetuned_unet.pt"
     best_dice = ckpt.get("metrics", {}).get("slice_level_dice", 0.0)
     print(f"Starting fine-tuning from dice: {best_dice:.4f}")
+    
+    # EARLY STOPPING SETUP
+    patience = 3
+    counter = 0
 
     # 5. Training Loop
     for epoch in range(1, args.epochs + 1):
@@ -104,8 +113,13 @@ def main() -> int:
             print(f"  Dice meningkat ({best_dice:.4f} -> {current_dice:.4f}). Menyimpan checkpoint terbaik.")
             best_dice = current_dice
             torch.save({"model_state": model.state_dict(), "encoder": encoder, "metrics": metrics}, best_path)
+            counter = 0
         else:
-            print(f"  Dice tidak meningkat (best: {best_dice:.4f}).")
+            counter += 1
+            print(f"  Dice tidak meningkat (best: {best_dice:.4f}). Counter: {counter}/{patience}")
+            if counter >= patience:
+                print("Early stopping triggered.")
+                break
 
     return 0
 

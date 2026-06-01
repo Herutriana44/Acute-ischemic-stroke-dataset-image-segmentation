@@ -23,6 +23,13 @@ from unet_segmentation.train import (
     SLICE_DICE_TARGET,
 )
 
+def is_mask_present(clean_root: Path, stem: str) -> bool:
+    from PIL import Image
+    import numpy as np
+    mask_path = clean_root / "mask" / f"{stem}.png"
+    mask = np.array(Image.open(mask_path).convert("L"))
+    return mask.max() > 0
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Fine-tuning U-Net")
     root = Path(__file__).resolve().parent.parent
@@ -67,8 +74,21 @@ def main() -> int:
     # 3. Setup Dataset/Loader
     clean_root = args.clean_root.resolve()
     _, stems = list_patients_and_files(clean_root)
-    train_stems, val_stems = split_by_patient(stems, args.val_ratio, args.seed)
+    train_stems_raw, val_stems = split_by_patient(stems, args.val_ratio, args.seed)
     
+    # PENYEIMBANGAN DATASET
+    import random
+    random.seed(args.seed)
+    all_mask_stems = [s for s in train_stems_raw if is_mask_present(clean_root, s)]
+    all_empty_stems = [s for s in train_stems_raw if s not in all_mask_stems]
+    
+    # Ambil 50% dari data kosong agar lebih seimbang
+    balanced_empty = random.sample(all_empty_stems, int(len(all_mask_stems) * 0.5))
+    train_stems = all_mask_stems + balanced_empty
+    random.shuffle(train_stems)
+    
+    print(f"Balanced train size: {len(train_stems)}")
+
     train_ds = CleanDataset(clean_root, train_stems, train=True)
     val_ds = CleanDataset(clean_root, val_stems, train=False)
     

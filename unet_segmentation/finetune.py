@@ -113,34 +113,44 @@ def main() -> int:
     best_dice = ckpt.get("metrics", {}).get("slice_level_dice", 0.0)
     print(f"Starting fine-tuning from dice: {best_dice:.4f}")
     
-    # EARLY STOPPING SETUP DIPERPANJANG
-    patience = 5
+    # EARLY STOPPING SETUP: Pantau 3 epoch terakhir
+    patience = 3
     counter = 0
+    dice_history = []
 
     # 5. Training Loop
     for epoch in range(1, args.epochs + 1):
         loss_tr = train_one_epoch(model, train_loader, optimizer, scaler, dice_loss, bce_loss, device, use_amp)
         metrics = evaluate(model, val_loader, device)
         current_dice = metrics['slice_level_dice']
-        sched.step(current_dice) # Update scheduler berdasarkan Dice
+        sched.step(current_dice) 
 
         print(f"Epoch {epoch}/{args.epochs}  loss={loss_tr:.4f}  dice={current_dice:.4f}")
         
-        # Simpan selalu checkpoint terakhir sebagai backup
+        # Simpan checkpoint terakhir
         last_path = args.out_dir / "last_finetuned_unet.pt"
         torch.save({"model_state": model.state_dict(), "encoder": encoder, "metrics": metrics}, last_path)
         
+        # Logika Early Stopping berdasarkan riwayat 3 epoch
+        if len(dice_history) >= patience:
+            # Bandingkan dengan max dari 3 epoch sebelumnya
+            if current_dice <= max(dice_history[-patience:]):
+                counter += 1
+                print(f"  Dice tidak meningkat dari riwayat 3 epoch (best_recent: {max(dice_history[-patience:]):.4f}). Counter: {counter}/{patience}")
+            else:
+                counter = 0
+        
+        dice_history.append(current_dice)
+        
+        # Simpan best secara global
         if current_dice > best_dice:
-            print(f"  Dice meningkat ({best_dice:.4f} -> {current_dice:.4f}). Menyimpan checkpoint terbaik.")
+            print(f"  Dice mencapai rekor baru ({best_dice:.4f} -> {current_dice:.4f}). Menyimpan checkpoint terbaik.")
             best_dice = current_dice
             torch.save({"model_state": model.state_dict(), "encoder": encoder, "metrics": metrics}, best_path)
-            counter = 0
-        else:
-            counter += 1
-            print(f"  Dice tidak meningkat (best: {best_dice:.4f}). Counter: {counter}/{patience}")
-            if counter >= patience:
-                print("Early stopping triggered.")
-                break
+
+        if counter >= patience:
+            print("Early stopping triggered: tidak ada kenaikan dalam 3 epoch terakhir.")
+            break
 
     return 0
 

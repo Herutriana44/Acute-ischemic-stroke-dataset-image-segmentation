@@ -82,12 +82,12 @@ def main() -> int:
     all_mask_stems = [s for s in train_stems_raw if is_mask_present(clean_root, s)]
     all_empty_stems = [s for s in train_stems_raw if s not in all_mask_stems]
     
-    # Ambil 50% dari data kosong agar lebih seimbang
-    balanced_empty = random.sample(all_empty_stems, int(len(all_mask_stems) * 0.5))
+    # Ambil 5% dari data kosong agar lebih seimbang
+    balanced_empty = random.sample(all_empty_stems, int(len(all_mask_stems) * 0.05))
     train_stems = all_mask_stems + balanced_empty
     random.shuffle(train_stems)
     
-    print(f"Balanced train size: {len(train_stems)}")
+    print(f"Balanced train size: {len(train_stems)} (Mask: {len(all_mask_stems)}, Empty: {len(balanced_empty)})")
 
     train_ds = CleanDataset(clean_root, train_stems, train=True)
     val_ds = CleanDataset(clean_root, val_stems, train=False)

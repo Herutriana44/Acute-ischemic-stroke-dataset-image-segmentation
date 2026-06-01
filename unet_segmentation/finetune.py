@@ -131,14 +131,13 @@ def main() -> int:
         last_path = args.out_dir / "last_finetuned_unet.pt"
         torch.save({"model_state": model.state_dict(), "encoder": encoder, "metrics": metrics}, last_path)
         
-        # Logika Early Stopping berdasarkan riwayat 3 epoch
-        if len(dice_history) >= patience:
-            # Bandingkan dengan max dari 3 epoch sebelumnya
-            if current_dice <= max(dice_history[-patience:]):
-                counter += 1
-                print(f"  Dice tidak meningkat dari riwayat 3 epoch (best_recent: {max(dice_history[-patience:]):.4f}). Counter: {counter}/{patience}")
-            else:
-                counter = 0
+        # Logika Early Stopping berdasarkan riwayat 3 epoch (DITUTUP SEMENTARA)
+        # if len(dice_history) >= patience:
+        #     if current_dice <= max(dice_history[-patience:]):
+        #         counter += 1
+        #         print(f"  Dice tidak meningkat dari riwayat 3 epoch (best_recent: {max(dice_history[-patience:]):.4f}). Counter: {counter}/{patience}")
+        #     else:
+        #         counter = 0
         
         dice_history.append(current_dice)
         
@@ -148,9 +147,9 @@ def main() -> int:
             best_dice = current_dice
             torch.save({"model_state": model.state_dict(), "encoder": encoder, "metrics": metrics}, best_path)
 
-        if counter >= patience:
-            print("Early stopping triggered: tidak ada kenaikan dalam 3 epoch terakhir.")
-            break
+        # if counter >= patience:
+        #     print("Early stopping triggered: tidak ada kenaikan dalam 3 epoch terakhir.")
+        #     break
 
     return 0
 

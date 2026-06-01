@@ -55,12 +55,12 @@ def main() -> int:
     encoder = ckpt.get("encoder", "resnet34")
     
     # 2. Build Model
-    model = build_model(encoder, pretrained=False) # Kita load weights sendiri
+    model = build_model(encoder, pretrained=True) # Gunakan pretrained=True untuk inisialisasi yang lebih baik
     model.load_state_dict(ckpt["model_state"])
     
-    # FREEZING ENCODER
+    # UNFREEZING: Izinkan encoder dilatih kembali dengan LR lebih kecil
     for param in model.encoder.parameters():
-        param.requires_grad = False
+        param.requires_grad = True
     
     model.to(device)
     
@@ -83,8 +83,9 @@ def main() -> int:
         
     dice_loss = smp.losses.DiceLoss(mode="binary", from_logits=True)
     bce_loss = nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-6, weight_decay=1e-4) # LR disesuaikan
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs, 1))
+    # Optimizer lebih agresif untuk fine-tuning
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4) 
+    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=2)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     print(f"DEBUG: Directory checkpoint: {args.out_dir.resolve()}")
@@ -92,17 +93,17 @@ def main() -> int:
     best_dice = ckpt.get("metrics", {}).get("slice_level_dice", 0.0)
     print(f"Starting fine-tuning from dice: {best_dice:.4f}")
     
-    # EARLY STOPPING SETUP
-    patience = 3
+    # EARLY STOPPING SETUP DIPERPANJANG
+    patience = 5
     counter = 0
 
     # 5. Training Loop
     for epoch in range(1, args.epochs + 1):
         loss_tr = train_one_epoch(model, train_loader, optimizer, scaler, dice_loss, bce_loss, device, use_amp)
         metrics = evaluate(model, val_loader, device)
-        sched.step()
-
         current_dice = metrics['slice_level_dice']
+        sched.step(current_dice) # Update scheduler berdasarkan Dice
+
         print(f"Epoch {epoch}/{args.epochs}  loss={loss_tr:.4f}  dice={current_dice:.4f}")
         
         # Simpan selalu checkpoint terakhir sebagai backup

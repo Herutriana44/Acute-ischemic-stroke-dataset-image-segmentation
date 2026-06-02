@@ -157,7 +157,7 @@ def main() -> int:
     ap.add_argument("--val-ratio", type=float, default=0.15)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--encoder", type=str, default="resnet34", help="Encoder smp, mis. resnet34, efficientnet-b0")
+    ap.add_argument("--encoder", type=str, default="efficientnet-b0", help="Encoder smp, mis. resnet34, efficientnet-b0")
     ap.add_argument("--no-pretrained", action="store_true", help="Tanpa bobot ImageNet pada encoder")
     ap.add_argument("--image-size", type=int, default=None, help="Resize sisi (default: ukuran asli)")
     ap.add_argument("--out-dir", type=Path, default=root / "checkpoints_unet")

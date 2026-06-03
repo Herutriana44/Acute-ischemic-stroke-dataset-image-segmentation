@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload to Google Drive
         run: |
-          rclone copy stroke-segmentation-win64.zip gdrive:builds/
+          rclone copy stroke-segmentation-win64.zip AIVolunterDermayu:builds/
 
   build-linux:
     name: Build Linux binary

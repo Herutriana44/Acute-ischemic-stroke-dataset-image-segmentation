@@ -56,6 +56,15 @@ jobs:
           path: stroke-segmentation-win64.zip
           retention-days: 30
 
+      - name: Setup Rclone
+        uses: AnimMouse/setup-rclone@v1
+        with:
+          rclone_config: ${{ secrets.RCLONE_CONF }}
+
+      - name: Upload to Google Drive
+        run: |
+          rclone copy stroke-segmentation-win64.zip gdrive:builds/
+
   build-linux:
     name: Build Linux binary
     runs-on: ubuntu-latest

@@ -37,10 +37,12 @@ jobs:
       - name: Archive production artifacts
         shell: powershell
         run: |
-          $sourceDir = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation"
-          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "best_unet.pt") -Destination $sourceDir
+          $tempDir = Join-Path $env:GITHUB_WORKSPACE "final_dist"
+          New-Item -ItemType Directory -Path $tempDir -Force
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation.exe") -Destination $tempDir
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "best_unet.pt") -Destination $tempDir
           $destination = Join-Path $env:GITHUB_WORKSPACE "stroke-segmentation-win64.zip"
-          Compress-Archive -Path (Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation\*") -DestinationPath $destination -Force
+          Compress-Archive -Path "$tempDir\*" -DestinationPath $destination -Force
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

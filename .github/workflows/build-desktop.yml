@@ -15,6 +15,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: LFS Pull
+        run: git lfs pull
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,6 +65,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: LFS Pull
+        run: git lfs pull
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -113,6 +123,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: LFS Pull
+        run: git lfs pull
 
       - name: Set up Python
         uses: actions/setup-python@v5

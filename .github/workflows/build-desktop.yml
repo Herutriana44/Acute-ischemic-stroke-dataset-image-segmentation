@@ -37,9 +37,10 @@ jobs:
       - name: Archive production artifacts
         shell: powershell
         run: |
-          $source = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation.exe"
+          $sourceDir = Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation"
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "best_unet.pt") -Destination $sourceDir
           $destination = Join-Path $env:GITHUB_WORKSPACE "stroke-segmentation-win64.zip"
-          Compress-Archive -Path $source -DestinationPath $destination -Force
+          Compress-Archive -Path (Join-Path $env:GITHUB_WORKSPACE "desktopapp\dist\AcuteStrokeSegmentation\*") -DestinationPath $destination -Force
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -132,6 +133,7 @@ jobs:
       - name: Archive production artifacts
         shell: bash
         run: |
+          cp best_unet.pt desktopapp/dist/AcuteStrokeSegmentation/
           cd desktopapp/dist
           7z a ../../stroke-segmentation-winlator.7z AcuteStrokeSegmentation
 

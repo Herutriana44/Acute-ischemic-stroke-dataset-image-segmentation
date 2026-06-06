@@ -16,16 +16,29 @@ from pathlib import Path
 
 def collect_pairs(root: Path, sub: str) -> list[tuple[Path, str, str]]:
     """
-    root/sub/<patient_id>/<file> -> daftar (src_path, patient_id, filename).
+    root/sub/<patient_id>/<file> OR root/sub/<KODEPASIEN>_<SLICEID>.<ext>
     """
     base = root / sub
     if not base.is_dir():
         return []
     out: list[tuple[Path, str, str]] = []
-    for patient_dir in sorted(p for p in base.iterdir() if p.is_dir()):
-        pid = patient_dir.name
-        for f in sorted(patient_dir.iterdir()):
+    
+    # Check if there are any subdirectories (patient_id based)
+    has_subdirs = any(p.is_dir() for p in base.iterdir())
+    
+    if has_subdirs:
+        for patient_dir in sorted(p for p in base.iterdir() if p.is_dir()):
+            pid = patient_dir.name
+            for f in sorted(patient_dir.iterdir()):
+                if f.is_file() and f.suffix.lower() in {".png", ".jpg", ".jpeg", ".tif", ".tiff"}:
+                    out.append((f, pid, f.name))
+    else:
+        # Flat structure: KODEPASIEN_SLICEID.png
+        for f in sorted(base.iterdir()):
             if f.is_file() and f.suffix.lower() in {".png", ".jpg", ".jpeg", ".tif", ".tiff"}:
+                # Try to extract patient ID from filename (part before the first underscore)
+                parts = f.stem.split('_')
+                pid = parts[0] if len(parts) > 1 else "unknown"
                 out.append((f, pid, f.name))
     return out
 

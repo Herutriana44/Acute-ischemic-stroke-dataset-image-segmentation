@@ -160,19 +160,6 @@ class MainWindow(QMainWindow):
         orig_col.addWidget(orig_scroll, stretch=1)
         panel_2d_layout.addLayout(orig_col, stretch=1)
 
-        # Mask image
-        mask_col = QVBoxLayout()
-        mask_col.addWidget(QLabel("<b style='color:#aaa;'>Predicted Mask</b>"))
-        self._lbl_mask = QLabel()
-        self._lbl_mask.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._lbl_mask.setStyleSheet("background:#111; border:1px solid #333;")
-        self._lbl_mask.setMinimumSize(QSize(300, 300))
-        mask_scroll = QScrollArea()
-        mask_scroll.setWidgetResizable(True)
-        mask_scroll.setWidget(self._lbl_mask)
-        mask_col.addWidget(mask_scroll, stretch=1)
-        panel_2d_layout.addLayout(mask_col, stretch=1)
-
         # Overlay image
         overlay_col = QVBoxLayout()
         overlay_col.addWidget(QLabel("<b style='color:#aaa;'>Overlay (Lesion)</b>"))
@@ -351,7 +338,7 @@ class MainWindow(QMainWindow):
             self._update_2d_panel()
 
     def _update_2d_panel(self) -> None:
-        """Load and display original, mask, and overlay images in the 2D panel."""
+        """Load and display original and overlay images in the 2D panel."""
         if not self._run_dir or not self._result:
             return
 
@@ -370,7 +357,6 @@ class MainWindow(QMainWindow):
             if pm is None:
                 label.setText("<span style='color:#666;'>Not available</span>")
                 return
-            # Scale to fit the label while preserving aspect ratio
             scaled = pm.scaled(
                 label.size().expandedTo(QSize(300, 300)),
                 Qt.AspectRatioMode.KeepAspectRatio,
@@ -379,13 +365,8 @@ class MainWindow(QMainWindow):
             label.setPixmap(scaled)
             label.setScaledContents(False)
 
-        pm_orig    = load_pixmap(r.get("original_png", ""))
-        pm_mask    = load_pixmap(r.get("mask_png", ""))
-        pm_overlay = load_pixmap(r.get("overlay_png", ""))
-
-        set_label(self._lbl_original, pm_orig)
-        set_label(self._lbl_mask, pm_mask)
-        set_label(self._lbl_overlay, pm_overlay)
+        set_label(self._lbl_original, load_pixmap(r.get("original_png", "")))
+        set_label(self._lbl_overlay,  load_pixmap(r.get("overlay_png", "")))
 
         # Update status with lesion info
         lesion_px = r.get("lesion_pixels", 0)

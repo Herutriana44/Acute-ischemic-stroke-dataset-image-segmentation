@@ -58,7 +58,7 @@ def main() -> int:
         print(f"Checkpoint tidak ditemukan: {args.checkpoint}")
         return 1
     
-    ckpt = torch.load(args.checkpoint, map_location=device)
+    ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
     encoder = ckpt.get("encoder", "resnet34")
     
     # 2. Build Model

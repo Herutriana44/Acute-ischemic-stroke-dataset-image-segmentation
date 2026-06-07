@@ -106,7 +106,7 @@ def run_dicom_inference(
 def run_image_inference(
     image_path: Path, run_id: Optional[str] = None
 ) -> Tuple[Path, dict]:
-    """Run single image inference. Returns (run_dir, result_dict)."""
+    """Run single image or single DICOM inference. Returns (run_dir, result_dict)."""
     if run_id is None:
         run_id = uuid.uuid4().hex[:12]
 
@@ -114,7 +114,12 @@ def run_image_inference(
     run_dir = runs_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    result = _run_image_inference_core(image_path, run_id, run_dir)
+    # Single .dcm file → route through DICOM pipeline (produces overlay.png too)
+    if image_path.suffix.lower() == ".dcm":
+        result = _run_single_dicom_inference(image_path, run_id, run_dir)
+    else:
+        result = _run_image_inference_core(image_path, run_id, run_dir)
+
     return run_dir, result
 
 
@@ -336,6 +341,91 @@ def _run_inference_core(
     (run_dir / "result.json").write_text(json.dumps(result), encoding="utf-8")
     return result
 
+
+
+def _run_single_dicom_inference(
+    dcm_path: Path, run_id: str, run_dir: Path
+) -> dict:
+    """Inference on a single .dcm file — extracts the pixel array and runs 2D segmentation."""
+    import pydicom
+
+    if not MODEL_PATH.exists():
+        raise RuntimeError(f"Model not found at: {MODEL_PATH}")
+
+    ds = pydicom.dcmread(str(dcm_path))
+
+    # Convert pixel array to HU if possible, otherwise use raw values
+    arr = ds.pixel_array.astype(np.float32)
+    try:
+        slope = float(getattr(ds, "RescaleSlope", 1.0))
+        intercept = float(getattr(ds, "RescaleIntercept", 0.0))
+        arr = arr * slope + intercept
+        # Window to brain CT range [0,1]
+        vol01 = window_hu(arr, center=40.0, width=80.0).astype(np.float32)
+    except Exception:
+        # Fallback: normalise to [0,1]
+        arr_min, arr_max = arr.min(), arr.max()
+        vol01 = (arr - arr_min) / max(arr_max - arr_min, 1.0)
+
+    arr_u8 = np.clip(vol01 * 255.0, 0, 255).astype(np.uint8)
+
+    model, _ = build_unet_from_checkpoint(MODEL_PATH)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+
+    with torch.no_grad():
+        img_resized = resize_if_needed(vol01, None)
+        rgb = np.stack([img_resized, img_resized, img_resized], axis=-1)
+        rgb = (rgb - IMAGENET_MEAN) / IMAGENET_STD
+        tensor_img = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0).float().to(device)
+        logits = model(tensor_img)
+        prob = torch.sigmoid(logits)[0, 0].detach().cpu().numpy()
+        mask = (prob > 0.5).astype(np.uint8)
+        mask = postprocess_mask2d(mask, min_area=64, closing_radius=2)
+
+    # Resize mask back to original image size if needed
+    if mask.shape != arr_u8.shape:
+        mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+        mask_img = mask_img.resize(
+            (arr_u8.shape[1], arr_u8.shape[0]), resample=Image.NEAREST
+        )
+        mask = (np.array(mask_img) > 127).astype(np.uint8)
+
+    lesion_px = int(mask.sum())
+
+    original_png = "input.png"
+    mask_png     = "mask_pred.png"
+    overlay_png  = "overlay.png"
+
+    Image.fromarray(arr_u8).save(run_dir / original_png, optimize=True)
+    Image.fromarray((mask * 255).astype(np.uint8)).save(run_dir / mask_png, optimize=True)
+
+    rgb_arr = np.stack([arr_u8, arr_u8, arr_u8], axis=-1).astype(np.float32)
+    alpha = 0.35
+    m = mask.astype(bool)
+    if m.any():
+        overlay_color = np.zeros_like(rgb_arr)
+        overlay_color[..., 0] = 255.0
+        overlay_color[..., 1] = 70.0
+        overlay_color[..., 2] = 70.0
+        rgb_arr[m] = (1.0 - alpha) * rgb_arr[m] + alpha * overlay_color[m]
+    Image.fromarray(np.clip(rgb_arr, 0, 255).astype(np.uint8)).save(
+        run_dir / overlay_png, optimize=True
+    )
+
+    result = {
+        "run_id": run_id,
+        "input_name": dcm_path.name,
+        "original_png": original_png,
+        "mask_png": mask_png,
+        "overlay_png": overlay_png,
+        "lesion_pixels": lesion_px,
+        "shape_hw": [arr_u8.shape[0], arr_u8.shape[1]],
+        "enable_3d": False,
+    }
+
+    (run_dir / "result.json").write_text(json.dumps(result), encoding="utf-8")
+    return result
 
 
 def _run_image_inference_core(

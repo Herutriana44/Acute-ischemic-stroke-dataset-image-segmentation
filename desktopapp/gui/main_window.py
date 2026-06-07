@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt, QUrl
-from PyQt6.QtGui import QAction, QFont, QIcon
+from PyQt6.QtGui import QAction, QFont, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSplitter,
     QTabWidget,
     QTextEdit,
@@ -27,7 +28,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEnginePage
 from pyvistaqt import QtInteractor
-# from viewer.html_viewer import build_result_html
 
 from gui.workers import InferenceWorker
 from gui.dicom_viewer import DicomViewer
@@ -132,38 +132,79 @@ class MainWindow(QMainWindow):
         self._progress.setVisible(False)
         layout.addWidget(self._progress)
 
-        # Splitter: left = log, right = viewer
+        # Splitter: viewer area
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Left: metrics + log
-        # left = QWidget()
-        # left_layout = QVBoxLayout(left)
-        # self._metrics_label = QLabel("<h3>Metrics</h3><p>Load data to start.</p>")
-        # self._metrics_label.setWordWrap(True)
-        # left_layout.addWidget(self._metrics_label)
+        # ── Stacked container: 2D result panel OR 3D viewer ──────────
+        self._stack = QWidget()
+        self._stack_layout = QVBoxLayout(self._stack)
+        self._stack_layout.setContentsMargins(0, 0, 0, 0)
+        self._stack_layout.setSpacing(0)
 
-        # self._log = QTextEdit()
-        # self._log.setReadOnly(True)
-        # self._log.setMaximumHeight(200)
-        # left_layout.addWidget(QLabel("<b>Log</b>"))
-        # left_layout.addWidget(self._log)
-        # splitter.addWidget(left)
+        # ── 2D Result Panel ───────────────────────────────────────────
+        self._panel_2d = QWidget()
+        panel_2d_layout = QHBoxLayout(self._panel_2d)
+        panel_2d_layout.setContentsMargins(8, 8, 8, 8)
+        panel_2d_layout.setSpacing(12)
 
-        # Right: Viewer Area (3D Mesh + DICOM Viewer side-by-side)
+        # Original image
+        orig_col = QVBoxLayout()
+        orig_col.addWidget(QLabel("<b style='color:#aaa;'>Input Image</b>"))
+        self._lbl_original = QLabel()
+        self._lbl_original.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_original.setStyleSheet("background:#111; border:1px solid #333;")
+        self._lbl_original.setMinimumSize(QSize(300, 300))
+        orig_scroll = QScrollArea()
+        orig_scroll.setWidgetResizable(True)
+        orig_scroll.setWidget(self._lbl_original)
+        orig_col.addWidget(orig_scroll, stretch=1)
+        panel_2d_layout.addLayout(orig_col, stretch=1)
+
+        # Mask image
+        mask_col = QVBoxLayout()
+        mask_col.addWidget(QLabel("<b style='color:#aaa;'>Predicted Mask</b>"))
+        self._lbl_mask = QLabel()
+        self._lbl_mask.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_mask.setStyleSheet("background:#111; border:1px solid #333;")
+        self._lbl_mask.setMinimumSize(QSize(300, 300))
+        mask_scroll = QScrollArea()
+        mask_scroll.setWidgetResizable(True)
+        mask_scroll.setWidget(self._lbl_mask)
+        mask_col.addWidget(mask_scroll, stretch=1)
+        panel_2d_layout.addLayout(mask_col, stretch=1)
+
+        # Overlay image
+        overlay_col = QVBoxLayout()
+        overlay_col.addWidget(QLabel("<b style='color:#aaa;'>Overlay (Lesion)</b>"))
+        self._lbl_overlay = QLabel()
+        self._lbl_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_overlay.setStyleSheet("background:#111; border:1px solid #333;")
+        self._lbl_overlay.setMinimumSize(QSize(300, 300))
+        overlay_scroll = QScrollArea()
+        overlay_scroll.setWidgetResizable(True)
+        overlay_scroll.setWidget(self._lbl_overlay)
+        overlay_col.addWidget(overlay_scroll, stretch=1)
+        panel_2d_layout.addLayout(overlay_col, stretch=1)
+
+        self._stack_layout.addWidget(self._panel_2d)
+        self._panel_2d.setVisible(False)
+
+        # ── 3D Viewer Area (PyVista + DICOM MPR) ─────────────────────
         self._viewer_container = QSplitter(Qt.Orientation.Horizontal)
-        
-        # 1. PyVista QtInteractor
+
         self._viewer = QtInteractor(self)
         self._viewer.setMinimumSize(QSize(400, 500))
         self._viewer_container.addWidget(self._viewer)
-        
-        # 2. Native DICOM multi-planar viewer (Axial / Coronal / Sagittal)
+
         self._dicom_viewer = DicomViewer()
         self._dicom_viewer.setMinimumSize(QSize(400, 500))
         self._viewer_container.addWidget(self._dicom_viewer)
-        
-        splitter.addWidget(self._viewer_container)
-        splitter.setStretchFactor(1, 1)
+
+        self._stack_layout.addWidget(self._viewer_container)
+        self._viewer_container.setVisible(False)
+
+        splitter.addWidget(self._stack)
+        splitter.setStretchFactor(0, 1)
         layout.addWidget(splitter)
 
         # ---------- menu bar ----------
@@ -216,9 +257,9 @@ class MainWindow(QMainWindow):
     def _load_image(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Image",
+            "Select Image or Single DICOM",
             "",
-            "Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp);;All Files (*)",
+            "Images & DICOM (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp *.dcm);;Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp);;DICOM (*.dcm);;All Files (*)",
         )
         if not file_path:
             return
@@ -291,22 +332,68 @@ class MainWindow(QMainWindow):
         self._display_viewer()
 
     def _display_viewer(self) -> None:
-        """Display results using both PyVista (3D Mesh) and DICOM Viewer."""
+        """Display results: 2D panel for image/single-DICOM, 3D viewers for DICOM series."""
         if not self._run_dir or not self._result:
             return
 
         is_3d = self._result.get("enable_3d", False)
-        self._viewer_container.setVisible(is_3d)
 
         if is_3d:
-            # ── 1. PyVista 3D Mesh ────────────────────────────────────────
+            # Show 3D viewer, hide 2D panel
+            self._panel_2d.setVisible(False)
+            self._viewer_container.setVisible(True)
             self._update_pyvista_tab()
-            # ── 2. Native DICOM multi-planar viewer ───────────────────────
             self._update_dicom_viewer_tab()
         else:
-            # 2D mode logic if needed
-            # self._log.append("Only 3D DICOM mode supported in this view.")
-            print("Only 3D DICOM mode supported in this view.")
+            # Show 2D panel, hide 3D viewer
+            self._viewer_container.setVisible(False)
+            self._panel_2d.setVisible(True)
+            self._update_2d_panel()
+
+    def _update_2d_panel(self) -> None:
+        """Load and display original, mask, and overlay images in the 2D panel."""
+        if not self._run_dir or not self._result:
+            return
+
+        r = self._result
+
+        def load_pixmap(filename: str) -> QPixmap | None:
+            if not filename:
+                return None
+            path = self._run_dir / filename
+            if not path.exists():
+                return None
+            pm = QPixmap(str(path))
+            return pm if not pm.isNull() else None
+
+        def set_label(label: QLabel, pm: QPixmap | None) -> None:
+            if pm is None:
+                label.setText("<span style='color:#666;'>Not available</span>")
+                return
+            # Scale to fit the label while preserving aspect ratio
+            scaled = pm.scaled(
+                label.size().expandedTo(QSize(300, 300)),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            label.setPixmap(scaled)
+            label.setScaledContents(False)
+
+        pm_orig    = load_pixmap(r.get("original_png", ""))
+        pm_mask    = load_pixmap(r.get("mask_png", ""))
+        pm_overlay = load_pixmap(r.get("overlay_png", ""))
+
+        set_label(self._lbl_original, pm_orig)
+        set_label(self._lbl_mask, pm_mask)
+        set_label(self._lbl_overlay, pm_overlay)
+
+        # Update status with lesion info
+        lesion_px = r.get("lesion_pixels", 0)
+        hw = r.get("shape_hw", ["-", "-"])
+        status = f"Done — {hw[0]}×{hw[1]} px | Lesion pixels: {lesion_px:,}"
+        if lesion_px == 0:
+            status += " (no lesion detected)"
+        self._status_label.setText(status)
 
     def _update_pyvista_tab(self) -> None:
         """Load DICOM-derived OBJ meshes into the PyVista QtInteractor."""

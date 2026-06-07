@@ -1,6 +1,7 @@
 """
 Fine-tuning U-Net (PyTorch) dengan checkpoint yang sudah ada.
 Dataset: clean_dataset/image + clean_dataset/mask.
+Checkpoint diambil dari Hugging Face Hub: herutriana44/acute-ischemic-stroke-unet
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from huggingface_hub import hf_hub_download
 
 from unet_segmentation.dataset import CleanDataset, list_patients_and_files, split_by_patient
 from unet_segmentation.train import (
@@ -22,6 +24,9 @@ from unet_segmentation.train import (
     train_one_epoch,
     SLICE_DICE_TARGET,
 )
+
+HF_REPO_ID = "herutriana44/acute-ischemic-stroke-unet"
+HF_FILENAME = "best_unet.pt"
 
 def is_mask_present(clean_root: Path, stem: str) -> bool:
     from PIL import Image
@@ -33,7 +38,24 @@ def is_mask_present(clean_root: Path, stem: str) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Fine-tuning U-Net")
     root = Path(__file__).resolve().parent.parent
-    ap.add_argument("--checkpoint", type=Path, required=True, help="Path ke file checkpoint (.pt)")
+    ap.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="Path ke file checkpoint lokal (.pt). Jika tidak diisi, download dari Hugging Face Hub.",
+    )
+    ap.add_argument(
+        "--hf-repo",
+        type=str,
+        default=HF_REPO_ID,
+        help=f"Hugging Face repo ID (default: {HF_REPO_ID})",
+    )
+    ap.add_argument(
+        "--hf-filename",
+        type=str,
+        default=HF_FILENAME,
+        help=f"Nama file checkpoint di HF repo (default: {HF_FILENAME})",
+    )
     ap.add_argument(
         "--clean-root",
         type=Path,
@@ -52,13 +74,25 @@ def main() -> int:
     args = ap.parse_args()
 
     device = torch.device(args.device)
-    
-    # 1. Load Checkpoint
-    if not args.checkpoint.exists():
-        print(f"Checkpoint tidak ditemukan: {args.checkpoint}")
-        return 1
-    
-    ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
+
+    # 1. Load Checkpoint (dari HF Hub atau lokal)
+    if args.checkpoint is not None and args.checkpoint.exists():
+        # Gunakan file lokal jika diberikan dan ada
+        ckpt_path = str(args.checkpoint)
+        print(f"Memuat checkpoint dari file lokal: {ckpt_path}")
+    else:
+        if args.checkpoint is not None:
+            print(f"File lokal '{args.checkpoint}' tidak ditemukan, mencoba download dari Hugging Face Hub...")
+        else:
+            print(f"Tidak ada checkpoint lokal, mendownload dari Hugging Face Hub: {args.hf_repo}/{args.hf_filename}")
+        try:
+            ckpt_path = hf_hub_download(repo_id=args.hf_repo, filename=args.hf_filename)
+            print(f"Checkpoint berhasil didownload ke: {ckpt_path}")
+        except Exception as e:
+            print(f"Gagal mendownload checkpoint dari Hugging Face Hub: {e}")
+            return 1
+
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     encoder = ckpt.get("encoder", "resnet34")
     
     # 2. Build Model

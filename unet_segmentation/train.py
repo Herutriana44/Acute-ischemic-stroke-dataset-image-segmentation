@@ -26,9 +26,21 @@ from unet_segmentation.metrics import (
 SLICE_DICE_TARGET = 0.76
 
 
-def build_model(encoder: str, pretrained: bool) -> nn.Module:
+def build_model(arch: str, encoder: str, pretrained: bool) -> nn.Module:
     weights = "imagenet" if pretrained else None
-    return smp.Unet(
+    
+    architectures = {
+        "unet": smp.Unet,
+        "unet++": smp.UnetPlusPlus,
+        "manet": smp.MAnet,
+        "linknet": smp.Linknet,
+        "fpn": smp.FPN,
+    }
+    
+    if arch not in architectures:
+        raise ValueError(f"Arsitektur '{arch}' tidak didukung. Pilih dari: {list(architectures.keys())}")
+        
+    return architectures[arch](
         encoder_name=encoder,
         encoder_weights=weights,
         in_channels=3,
@@ -157,6 +169,7 @@ def main() -> int:
     ap.add_argument("--val-ratio", type=float, default=0.15)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--arch", type=str, default="unet", help="Arsitektur: unet, unet++, manet, linknet, fpn")
     ap.add_argument("--encoder", type=str, default="efficientnet-b0", help="Encoder smp, mis. resnet34, efficientnet-b0")
     ap.add_argument("--no-pretrained", action="store_true", help="Tanpa bobot ImageNet pada encoder")
     ap.add_argument("--image-size", type=int, default=None, help="Resize sisi (default: ukuran asli)")
@@ -206,7 +219,7 @@ def main() -> int:
         pin_memory=device.type == "cuda",
     )
 
-    model = build_model(args.encoder, pretrained=not args.no_pretrained)
+    model = build_model(args.arch, args.encoder, pretrained=not args.no_pretrained)
     model.to(device)
 
     dice_loss = smp.losses.DiceLoss(mode="binary", from_logits=True)
@@ -250,6 +263,7 @@ def main() -> int:
                 {
                     "epoch": epoch,
                     "model_state": model.state_dict(),
+                    "arch": args.arch,
                     "encoder": args.encoder,
                     "metrics": metrics,
                 },

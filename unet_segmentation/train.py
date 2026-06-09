@@ -219,6 +219,9 @@ def main() -> int:
         pin_memory=device.type == "cuda",
     )
 
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+    
     model = build_model(args.arch, args.encoder, pretrained=not args.no_pretrained)
     model.to(device)
 

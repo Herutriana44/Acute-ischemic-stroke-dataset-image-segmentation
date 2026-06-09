@@ -96,7 +96,13 @@ def main() -> int:
     encoder = ckpt.get("encoder", "resnet34")
     
     # 2. Build Model
-    model = build_model(encoder, pretrained=True) # Gunakan pretrained=True untuk inisialisasi yang lebih baik
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+
+    # Catatan: Karena train.py sudah diupdate, build_model sekarang menerima parameter 'arch'.
+    # Untuk backward compatibility, kita gunakan 'unet' sebagai default jika arch tidak ada di checkpoint.
+    arch = ckpt.get("arch", "unet")
+    model = build_model(arch, encoder, pretrained=True)
     model.load_state_dict(ckpt["model_state"])
     
     # UNFREEZING: Izinkan encoder dilatih kembali dengan LR lebih kecil

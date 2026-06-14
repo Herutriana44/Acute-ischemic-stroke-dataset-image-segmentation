@@ -189,6 +189,12 @@ class MainWindow(QMainWindow):
 
         self._stack_layout.addWidget(self._viewer_container)
         self._viewer_container.setVisible(False)
+        
+        # ── Lesion Info Panel ────────────────────────────────────────
+        self._lbl_lesion_info = QLabel("No lesion data loaded.")
+        self._lbl_lesion_info.setStyleSheet("background:#222; color:#eee; padding:10px; border-top:1px solid #444;")
+        self._lbl_lesion_info.setWordWrap(True)
+        self._stack_layout.addWidget(self._lbl_lesion_info)
 
         splitter.addWidget(self._stack)
         splitter.setStretchFactor(0, 1)
@@ -367,14 +373,37 @@ class MainWindow(QMainWindow):
 
         set_label(self._lbl_original, load_pixmap(r.get("original_png", "")))
         set_label(self._lbl_overlay,  load_pixmap(r.get("overlay_png", "")))
+        
+        self._update_lesion_info()
 
-        # Update status with lesion info
-        lesion_px = r.get("lesion_pixels", 0)
-        hw = r.get("shape_hw", ["-", "-"])
-        status = f"Done — {hw[0]}×{hw[1]} px | Lesion pixels: {lesion_px:,}"
-        if lesion_px == 0:
-            status += " (no lesion detected)"
-        self._status_label.setText(status)
+    def _update_lesion_info(self) -> None:
+        """Populate the lesion info label with details from results."""
+        if not self._result:
+            return
+        
+        r = self._result
+        is_3d = r.get("enable_3d", False)
+        
+        info = "<b>Lesion Details:</b><br/>"
+        if is_3d:
+            lesion_voxels = r.get("lesion_voxels", 0)
+            lesion_ml = r.get("lesion_volume_ml", 0.0)
+            info += f"Volume: {lesion_ml:.2f} mL ({lesion_voxels:,} voxels)<br/>"
+        else:
+            lesion_pixels = r.get("lesion_pixels", 0)
+            info += f"Pixels: {lesion_pixels:,}<br/>"
+            
+        # Example metadata (customize based on what's available in result dict)
+        if "shape_hw" in r:
+            hw = r["shape_hw"]
+            info += f"Resolution: {hw[0]}x{hw[1]}<br/>"
+            
+        if lesion_pixels == 0 and not is_3d:
+             info += "Status: No lesion detected."
+        else:
+             info += "Status: Lesion detected."
+             
+        self._lbl_lesion_info.setText(info)
 
     def _update_pyvista_tab(self) -> None:
         """Load DICOM-derived OBJ meshes into the PyVista QtInteractor."""
@@ -424,6 +453,8 @@ class MainWindow(QMainWindow):
             self._viewer.add_legend()
         self._viewer.reset_camera()
         self._viewer.render()
+        
+        self._update_lesion_info()
 
     def _update_dicom_viewer_tab(self) -> None:
         """Load CT and mask volumes into the native DICOM multi-planar viewer."""
@@ -493,6 +524,8 @@ class MainWindow(QMainWindow):
             # self._log.append(f"DICOM Viewer error: {exc}")
             print(f"DICOM Viewer error: {exc}")
             traceback.print_exc()
+
+        self._update_lesion_info()
 
     def _save_results(self) -> None:
         if not self._run_dir:

@@ -159,13 +159,13 @@ def postprocess_mask2d(
     """Postprocess mask 2D biner (H,W) -> biner."""
     mm = (m > 0).astype(bool)
     if closing_radius > 0:
-        from skimage.morphology import binary_closing, disk
+        from skimage.morphology import closing, disk
 
-        mm = binary_closing(mm, footprint=disk(closing_radius))
+        mm = closing(mm, footprint=disk(closing_radius))
     if min_area > 0:
         from skimage.morphology import remove_small_objects
 
-        mm = remove_small_objects(mm, min_size=int(min_area))
+        mm = remove_small_objects(mm, max_size=int(min_area) - 1)
     return mm.astype(np.uint8)
 
 

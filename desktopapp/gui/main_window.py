@@ -392,16 +392,16 @@ class MainWindow(QMainWindow):
         else:
             lesion_pixels = r.get("lesion_pixels", 0)
             info += f"Pixels: {lesion_pixels:,}<br/>"
-            
+
         # Example metadata (customize based on what's available in result dict)
         if "shape_hw" in r:
             hw = r["shape_hw"]
             info += f"Resolution: {hw[0]}x{hw[1]}<br/>"
-            
-        if lesion_pixels == 0 and not is_3d:
-             info += "Status: No lesion detected."
+
+        if is_3d:
+            info += "Status: No lesion detected." if lesion_voxels == 0 else "Status: Lesion detected."
         else:
-             info += "Status: Lesion detected."
+            info += "Status: No lesion detected." if lesion_pixels == 0 else "Status: Lesion detected."
              
         self._lbl_lesion_info.setText(info)
 

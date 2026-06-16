@@ -31,6 +31,7 @@ from pyvistaqt import QtInteractor
 
 from gui.workers import InferenceWorker
 from gui.dicom_viewer import DicomViewer
+from gui.stl_viewer_window import STLViewerWindow
 
 
 class _ConsolePage(QWebEnginePage):
@@ -88,6 +89,7 @@ class MainWindow(QMainWindow):
         # sys.stderr = self._log_stream
         self._run_dir: Path | None = None
         self._result: dict | None = None
+        self._stl_viewer: STLViewerWindow | None = None
 
     # ------------------------------------------------------------------
     # UI setup
@@ -112,6 +114,10 @@ class MainWindow(QMainWindow):
         self._btn_view = QPushButton("View Results")
         self._btn_view.clicked.connect(self._view_results)
         self._btn_view.setEnabled(False)
+        self._btn_stl = QPushButton("View STL 3D")
+        self._btn_stl.clicked.connect(self._view_stl)
+        self._btn_stl.setEnabled(False)
+        self._btn_stl.setToolTip("Open STL 3D viewer (available after DICOM series inference)")
         self._btn_save = QPushButton("Save Results")
         self._btn_save.clicked.connect(self._save_results)
         self._btn_save.setEnabled(False)
@@ -120,6 +126,7 @@ class MainWindow(QMainWindow):
         top_bar.addWidget(self._btn_image)
         top_bar.addSpacing(20)
         top_bar.addWidget(self._btn_view)
+        top_bar.addWidget(self._btn_stl)
         top_bar.addWidget(self._btn_save)
         top_bar.addStretch()
         self._status_label = QLabel("Ready.")
@@ -227,6 +234,9 @@ class MainWindow(QMainWindow):
         act_results = QAction("View Results", self)
         act_results.triggered.connect(self._view_results)
         view_menu.addAction(act_results)
+        act_stl = QAction("View STL 3D…", self)
+        act_stl.triggered.connect(self._view_stl)
+        view_menu.addAction(act_stl)
 
         help_menu = menubar.addMenu("&Help")
         act_about = QAction("About…", self)
@@ -296,6 +306,12 @@ class MainWindow(QMainWindow):
         # self._log.append("Inference complete.")
         self._btn_view.setEnabled(True)
         self._btn_save.setEnabled(True)
+        # Enable STL viewer button only if DICOM (3D) inference was run
+        stl_available = (
+            result.get("enable_3d", False)
+            and ((run_dir / "brain.stl").exists() or (run_dir / "lesion.stl").exists())
+        )
+        self._btn_stl.setEnabled(stl_available)
         # self._update_metrics()
         self._view_results()
 
@@ -304,6 +320,7 @@ class MainWindow(QMainWindow):
         self._status_label.setText("Error.")
         # self._log.append(f"ERROR: {msg}")
         QMessageBox.critical(self, "Inference Error", msg)
+        self._btn_stl.setEnabled(False)
 
     def _update_metrics(self) -> None:
         if not self._result:
@@ -323,6 +340,25 @@ class MainWindow(QMainWindow):
         if not self._run_dir or not self._result:
             return
         self._display_viewer()
+
+    def _view_stl(self) -> None:
+        """Open the STL 3D viewer in a new window."""
+        if not self._run_dir:
+            return
+
+        brain_stl  = self._run_dir / "brain.stl"
+        lesion_stl = self._run_dir / "lesion.stl"
+
+        # Pass whichever files exist (viewer handles missing gracefully)
+        self._stl_viewer = STLViewerWindow(
+            brain_stl  = brain_stl  if brain_stl.exists()  else None,
+            lesion_stl = lesion_stl if lesion_stl.exists() else None,
+            parent     = None,   # open as independent window
+        )
+        self._stl_viewer.setWindowTitle(
+            f"STL 3D Viewer — {self._result.get('run_id', '')}"
+        )
+        self._stl_viewer.show()
 
     def _display_viewer(self) -> None:
         """Display results: 2D panel for image/single-DICOM, 3D viewers for DICOM series."""

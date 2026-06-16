@@ -195,6 +195,42 @@ def _write_obj(path: Path, verts: np.ndarray, faces: np.ndarray) -> None:
             f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
 
 
+def _write_stl(path: Path, verts: np.ndarray, faces: np.ndarray) -> None:
+    """Write mesh to binary STL format using vtkmodules.
+
+    verts : (N, 3) float64 — vertex coordinates (x, y, z)
+    faces : (M, 3) int64   — triangle indices into verts
+    """
+    from vtkmodules.vtkCommonCore import vtkPoints
+    from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData, vtkTriangle
+    from vtkmodules.vtkIOGeometry import vtkSTLWriter
+
+    # Build vtkPoints
+    vtk_points = vtkPoints()
+    vtk_points.SetNumberOfPoints(len(verts))
+    for i, (x, y, z) in enumerate(verts):
+        vtk_points.SetPoint(i, float(x), float(y), float(z))
+
+    # Build vtkCellArray of triangles
+    vtk_cells = vtkCellArray()
+    for tri in faces:
+        triangle = vtkTriangle()
+        triangle.GetPointIds().SetId(0, int(tri[0]))
+        triangle.GetPointIds().SetId(1, int(tri[1]))
+        triangle.GetPointIds().SetId(2, int(tri[2]))
+        vtk_cells.InsertNextCell(triangle)
+
+    poly = vtkPolyData()
+    poly.SetPoints(vtk_points)
+    poly.SetPolys(vtk_cells)
+
+    writer = vtkSTLWriter()
+    writer.SetFileName(str(path))
+    writer.SetInputData(poly)
+    writer.SetFileTypeToBinary()
+    writer.Write()
+
+
 def _run_inference_core(
     dicom_dir: Path, run_id: str, run_dir: Path
 ) -> dict:
@@ -299,9 +335,11 @@ def _run_inference_core(
         if hu_surf:
             hu_mesh = _mesh_to_json(*hu_surf)
             _write_obj(run_dir / "brain.obj", *hu_surf)
+            _write_stl(run_dir / "brain.stl", *hu_surf)
         if lesion_surf:
             lesion_mesh = _mesh_to_json(*lesion_surf)
             _write_obj(run_dir / "lesion.obj", *lesion_surf)
+            _write_stl(run_dir / "lesion.stl", *lesion_surf)
 
         ply_path = run_dir / "mesh_ct_lesion_colored.ply"
         _write_colored_ply(ply_path, hu_surf, lesion_surf)

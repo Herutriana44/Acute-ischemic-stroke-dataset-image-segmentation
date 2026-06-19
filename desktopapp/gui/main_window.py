@@ -295,8 +295,8 @@ class MainWindow(QMainWindow):
         self._worker.start()
 
     def _on_progress(self, msg: str) -> None:
-        # self._log.append(msg)
         print(msg)
+        self._status_label.setText(msg)
 
     def _on_inference_done(self, run_dir: Path, result: dict) -> None:
         self._progress.setVisible(False)

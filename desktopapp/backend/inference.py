@@ -64,9 +64,29 @@ def _ensure_runs_dir() -> Path:
 
 
 def run_dicom_inference(
-    archive_path: Path, run_id: Optional[str] = None
+    archive_path: Path,
+    run_id: Optional[str] = None,
+    progress_cb=None,
 ) -> Tuple[Path, dict]:
-    """Run full DICOM series inference. Returns (run_dir, result_dict)."""
+    """Run full DICOM series inference. Returns (run_dir, result_dict).
+
+    Parameters
+    ----------
+    archive_path : Path
+        Path to the ZIP/RAR/TAR archive containing a DICOM series.
+    run_id : str, optional
+        Unique run identifier; generated automatically if not provided.
+    progress_cb : callable(str), optional
+        Optional callback to report progress messages.
+    """
+    def _progress(msg: str) -> None:
+        print(msg)
+        if progress_cb is not None:
+            try:
+                progress_cb(msg)
+            except Exception:
+                pass
+
     if run_id is None:
         run_id = uuid.uuid4().hex[:12]
 
@@ -74,30 +94,29 @@ def run_dicom_inference(
     run_dir = runs_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Extract archive
-    from werkzeug.datastructures import FileStorage
-    from io import BytesIO
+    _progress(f"Extracting archive: {archive_path.name}")
 
-    # We need to simulate a FileStorage object for extract_archive
+    # Copy archive to a temp file so we can safely extract it
+    from tempfile import NamedTemporaryFile
     with open(archive_path, "rb") as f:
-        from tempfile import NamedTemporaryFile
         with NamedTemporaryFile(suffix=archive_path.suffix, delete=False) as tmp:
             tmp.write(f.read())
             tmp_path = Path(tmp.name)
 
     try:
-        # Use archive_service to extract
+        # Extract
         extracted_dir = run_dir / "extracted"
         extracted_dir.mkdir(parents=True, exist_ok=True)
-
-        # Extract manually based on suffix
         _extract_archive(tmp_path, extracted_dir)
 
-        # Find DICOM series
+        # Find DICOM series directory (robust — no modality restriction)
+        _progress("Searching for DICOM series…")
         series_dir = _find_dicom_series(extracted_dir)
+        dcm_count = len(list(series_dir.glob("*.dcm")))
+        _progress(f"Found DICOM series in: {series_dir.name!r} ({dcm_count} files)")
 
         # Run inference
-        result = _run_inference_core(series_dir, run_id, run_dir)
+        result = _run_inference_core(series_dir, run_id, run_dir, progress_cb=_progress)
         return run_dir, result
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -148,41 +167,82 @@ def _extract_archive(archive_path: Path, out_dir: Path) -> None:
 
 
 def _find_dicom_series(extracted_dir: Path) -> Path:
-    """Find DICOM series directory (CT series with most slices)."""
+    """Find DICOM series directory (CT series with most slices).
+
+    Search strategy (in order of priority):
+    1. Directories whose DICOM files report Modality == 'CT'.
+    2. Directories whose path contains a component named 'CT' (case-insensitive).
+    3. Directories that contain readable DICOM pixel data (any modality).
+    4. The directory with the most .dcm files (last-resort fallback).
+    """
     import pydicom
 
-    REQUIRED_MODALITY = "CT"
+    # ── collect every directory that contains at least one .dcm file ──
     candidate_dirs: dict[Path, int] = {}
     for dicom_path in extracted_dir.rglob("*.dcm"):
         parent = dicom_path.parent
         candidate_dirs[parent] = candidate_dirs.get(parent, 0) + 1
 
+    # Also handle files without .dcm extension that are still DICOM
     if not candidate_dirs:
-        raise RuntimeError("No .dcm files found in archive.")
+        for p in extracted_dir.rglob("*"):
+            if p.is_file() and p.suffix.lower() not in {
+                ".zip", ".tar", ".gz", ".json", ".txt", ".xml", ".jpg",
+                ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".nii",
+            }:
+                try:
+                    pydicom.dcmread(str(p), stop_before_pixels=True, force=True)
+                    parent = p.parent
+                    candidate_dirs[parent] = candidate_dirs.get(parent, 0) + 1
+                except Exception:
+                    pass
 
-    # Check for CT modality
+    if not candidate_dirs:
+        raise RuntimeError(
+            "No DICOM files found in archive. "
+            "Make sure the ZIP contains .dcm files (e.g. 000.dcm, 001.dcm …)."
+        )
+
+    # ── pass 1: explicit CT modality ─────────────────────────────────
     ct_dirs: list[tuple[Path, int]] = []
+    any_dicom_dirs: list[tuple[Path, int]] = []
     for d, n in candidate_dirs.items():
-        try:
-            fp = next(d.glob("*.dcm"))
-            ds = pydicom.dcmread(str(fp), stop_before_pixels=True, force=True)
-            if getattr(ds, "Modality", "").strip().upper() == REQUIRED_MODALITY:
-                ct_dirs.append((d, n))
-        except Exception:
+        sample_files = list(d.glob("*.dcm")) or [
+            p for p in d.iterdir() if p.is_file()
+        ]
+        if not sample_files:
             continue
+        try:
+            ds = pydicom.dcmread(
+                str(sample_files[0]), stop_before_pixels=True, force=True
+            )
+            modality = getattr(ds, "Modality", "").strip().upper()
+            if modality == "CT":
+                ct_dirs.append((d, n))
+            # Track all dirs with readable DICOM (for pass 3)
+            any_dicom_dirs.append((d, n))
+        except Exception:
+            # Unreadable header — still count it for last-resort fallback
+            any_dicom_dirs.append((d, n))
 
     if ct_dirs:
         return max(ct_dirs, key=lambda x: x[1])[0]
 
-    # Fallback: look for CT in path
+    # ── pass 2: 'CT' in path components ──────────────────────────────
+    path_ct_dirs: list[tuple[Path, int]] = []
     for d, n in candidate_dirs.items():
-        if any(p.upper() == "CT" for p in d.parts):
-            ct_dirs.append((d, n))
+        if any(part.upper() == "CT" for part in d.parts):
+            path_ct_dirs.append((d, n))
 
-    if ct_dirs:
-        return max(ct_dirs, key=lambda x: x[1])[0]
+    if path_ct_dirs:
+        return max(path_ct_dirs, key=lambda x: x[1])[0]
 
-    raise RuntimeError("No DICOM CT series found in archive.")
+    # ── pass 3: any readable DICOM (modality-agnostic) ───────────────
+    if any_dicom_dirs:
+        return max(any_dicom_dirs, key=lambda x: x[1])[0]
+
+    # ── pass 4: most .dcm files (absolute last resort) ────────────────
+    return max(candidate_dirs.items(), key=lambda x: x[1])[0]
 
 
 def _write_obj(path: Path, verts: np.ndarray, faces: np.ndarray) -> None:
@@ -232,9 +292,17 @@ def _write_stl(path: Path, verts: np.ndarray, faces: np.ndarray) -> None:
 
 
 def _run_inference_core(
-    dicom_dir: Path, run_id: str, run_dir: Path
+    dicom_dir: Path, run_id: str, run_dir: Path, progress_cb=None
 ) -> dict:
     """Core DICOM inference logic (adapted from webapp/services/inference_service.py)."""
+    def _progress(msg: str) -> None:
+        print(msg)
+        if progress_cb is not None:
+            try:
+                progress_cb(msg)
+            except Exception:
+                pass
+
     if not MODEL_PATH.exists():
         raise RuntimeError(f"Model not found at: {MODEL_PATH}")
 
@@ -254,10 +322,10 @@ def _run_inference_core(
         shutil.copy2(fp, dicom_series_dir / fp.name)
 
     # Load DICOM series
+    _progress(f"Loading {len(dicom_files)} DICOM slices…")
     slices = load_dicom_series(dicom_dir)
     enable_3d = len(slices) > 1
-
-    # Build model
+    _progress(f"Loaded {len(slices)} slices — enable_3d={enable_3d}")
     model, _ = build_unet_from_checkpoint(MODEL_PATH)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -330,10 +398,26 @@ def _run_inference_core(
     lesion_mesh = None
     mesh_ply_name = ""
     if enable_3d:
-        mesh_max_dim = 100
-        hu_volume_for_mesh, stride = _downsample_volume(hu_vol, max_dim=mesh_max_dim)
-        mask_for_mesh = masks.astype(np.float32)[::stride, ::stride, ::stride]
-        mesh_spacing = (stride * ps_row, stride * ps_col, stride * ps_z)
+        # ── per-axis downsampling ──────────────────────────────────────
+        # Downsample each axis independently to a max of mesh_max_dim voxels.
+        # This preserves the relative proportions of the volume instead of
+        # squashing the Z axis (which usually has far fewer slices than XY).
+        mesh_max_dim = 128
+        Z, Y, X = hu_vol.shape
+        sz_s = max(1, int(round(Z / mesh_max_dim)))  # stride along Z
+        sy_s = max(1, int(round(Y / mesh_max_dim)))  # stride along Y
+        sx_s = max(1, int(round(X / mesh_max_dim)))  # stride along X
+
+        hu_volume_for_mesh = hu_vol[::sz_s, ::sy_s, ::sx_s]
+        mask_for_mesh = masks.astype(np.float32)[::sz_s, ::sy_s, ::sx_s]
+
+        # Physical voxel size after downsampling (Z, Y, X order)
+        mesh_spacing = (
+            sz_s * ps_z,   # physical step along Z (slice direction)
+            sy_s * ps_row, # physical step along Y (row direction)
+            sx_s * ps_col, # physical step along X (col direction)
+        )
+
         hu_level = float(np.percentile(hu_volume_for_mesh, 60))
         hu_surf = _marching_surface(hu_volume_for_mesh, mesh_spacing, hu_level)
         lesion_surf = _marching_surface(mask_for_mesh, mesh_spacing, 0.5) if lesion_vox > 0 else None
@@ -559,6 +643,11 @@ def _extract_numeric(stem: str) -> tuple:
 
 
 def _downsample_volume(volume: np.ndarray, max_dim: int = 128) -> tuple[np.ndarray, int]:
+    """Uniform downsample (same stride on all axes). Returns (downsampled, stride).
+
+    NOTE: Prefer per-axis downsampling for anisotropic volumes (e.g. CT with
+    thick slices) to avoid squashing the Z axis.
+    """
     if max(volume.shape) <= max_dim:
         return volume, 1
     stride = max(1, int(round(max(volume.shape) / max_dim)))
@@ -570,17 +659,38 @@ def _marching_surface(
     mesh_spacing: tuple[float, float, float],
     level: float,
 ) -> tuple[np.ndarray, np.ndarray] | None:
+    """Run marching cubes on a (Z, Y, X) volume.
+
+    Parameters
+    ----------
+    volume : ndarray (Z, Y, X)
+    mesh_spacing : (sz, sy, sx) physical voxel size in mm
+    level : iso-surface level
+    """
     if np.nanmax(volume) <= level:
         return None
     from skimage.measure import marching_cubes
+
+    sz, sy, sx = mesh_spacing  # Z, Y, X physical spacing
+
+    # skimage marching_cubes expects volume in (row0, row1, row2) order.
+    # Our volume is (Z, Y, X), so spacing must also be (sz, sy, sx).
     verts, faces, _, _ = marching_cubes(
         volume.astype(np.float32),
         level=level,
-        spacing=(mesh_spacing[2], mesh_spacing[0], mesh_spacing[1]),
+        spacing=(sz, sy, sx),   # matches (Z, Y, X) axis order
     )
     if len(verts) == 0 or len(faces) == 0:
         return None
-    xyz = np.column_stack([verts[:, 2], verts[:, 1], verts[:, 0]]).astype(np.float64)
+
+    # marching_cubes returns verts in the same axis order as the volume:
+    # verts[:, 0] = Z-axis coords, verts[:, 1] = Y-axis, verts[:, 2] = X-axis.
+    # Remap to (X, Y, Z) for standard 3-D rendering.
+    xyz = np.column_stack([
+        verts[:, 2],   # X
+        verts[:, 1],   # Y
+        verts[:, 0],   # Z
+    ]).astype(np.float64)
     return xyz, faces.astype(np.int64)
 
 

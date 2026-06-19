@@ -31,7 +31,11 @@ class InferenceWorker(QThread):
 
             if self._mode == "dicom":
                 self.progress.emit("Extracting archive…")
-                run_dir, result = run_dicom_inference(self._input_path, self._run_id)
+                run_dir, result = run_dicom_inference(
+                    self._input_path,
+                    self._run_id,
+                    progress_cb=self.progress.emit,
+                )
             else:
                 self.progress.emit("Processing image…")
                 run_dir, result = run_image_inference(self._input_path, self._run_id)

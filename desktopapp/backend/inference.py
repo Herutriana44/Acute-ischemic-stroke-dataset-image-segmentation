@@ -241,9 +241,15 @@ def _run_inference_core(
     # Copy DICOM series
     dicom_series_dir = run_dir / "dicom_series"
     dicom_series_dir.mkdir(parents=True, exist_ok=True)
-    dicom_files = sorted([p for p in Path(dicom_dir).glob("*.dcm") if p.is_file()])
+    dicom_files = sorted(
+        [p for p in Path(dicom_dir).glob("*.dcm") if p.is_file()],
+        key=lambda p: _extract_numeric(p.stem)
+    )
     if not dicom_files:
-        dicom_files = sorted([p for p in Path(dicom_dir).iterdir() if p.is_file()])
+        dicom_files = sorted(
+            [p for p in Path(dicom_dir).iterdir() if p.is_file()],
+            key=lambda p: _extract_numeric(p.stem)
+        )
     for fp in dicom_files:
         shutil.copy2(fp, dicom_series_dir / fp.name)
 

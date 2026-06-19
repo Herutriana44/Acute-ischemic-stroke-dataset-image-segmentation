@@ -541,6 +541,23 @@ def _run_image_inference_core(
 # Helpers (adapted from webapp/services/inference_service.py)
 # ---------------------------------------------------------------------------
 
+def _extract_numeric(stem: str) -> tuple:
+    """Extract numeric parts from a filename stem for natural sorting.
+
+    Handles formats: 1, 01, 001, 0001, IMG-0001, CT_Slice_1, etc.
+    Returns a tuple alternating strings and ints for correct ordering.
+    """
+    import re
+    parts = re.split(r'(\d+)', stem)
+    result = []
+    for p in parts:
+        if p.isdigit():
+            result.append(int(p))
+        else:
+            result.append(p.lower())
+    return tuple(result)
+
+
 def _downsample_volume(volume: np.ndarray, max_dim: int = 128) -> tuple[np.ndarray, int]:
     if max(volume.shape) <= max_dim:
         return volume, 1

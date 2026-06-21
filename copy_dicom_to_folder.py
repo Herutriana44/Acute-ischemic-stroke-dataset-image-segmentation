@@ -21,6 +21,6 @@ def copy_and_rename_dicom(source_folder, output_folder):
                 print(f"Copied: {source_path} -> {destination_path}")
 
 # Contoh penggunaan:
-source_dir = "dataset"
-output_dir = "all_dicom"
+source_dir = os.path.abspath("dataset")
+output_dir = os.path.abspath("all_dicom")
 copy_and_rename_dicom(source_dir, output_dir)

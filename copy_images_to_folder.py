@@ -25,6 +25,6 @@ def copy_and_rename_images(source_folder, output_folder):
                 print(f"Copied: {source_path} -> {destination_path}")
 
 # Contoh penggunaan:
-source_dir = os.path.abspath("dataset")
+source_dir = os.path.abspath("dataset/image")
 output_dir = os.path.abspath("all_data_gambar")
 copy_and_rename_images(source_dir, output_dir)

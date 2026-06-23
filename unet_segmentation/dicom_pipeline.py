@@ -165,7 +165,7 @@ def postprocess_mask2d(
     if min_area > 0:
         from skimage.morphology import remove_small_objects
 
-        mm = remove_small_objects(mm, max_size=int(min_area) - 1)
+        mm = remove_small_objects(mm, min_size=int(min_area))
     return mm.astype(np.uint8)
 
 

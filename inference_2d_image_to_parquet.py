@@ -83,8 +83,8 @@ def process_all_images_to_parquet(input_folder: Path, output_parquet: Path):
     """
     Proses semua file gambar di `input_folder` (rekursif) → simpan ke Parquet.
     """
-    results = []
     input_folder = Path(input_folder)
+    output_parquet = Path(output_parquet)
 
     if not input_folder.exists():
         raise FileNotFoundError(f"Folder tidak ada: {input_folder.resolve()}")
@@ -92,28 +92,33 @@ def process_all_images_to_parquet(input_folder: Path, output_parquet: Path):
     # Supported image extensions
     image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')
 
+    count = 0
     for root, _, files in os.walk(input_folder):
         for file in files:
             if file.lower().endswith(image_extensions):
                 image_path = Path(root) / file
                 try:
                     raw_pixels, mask, has_seg = infer_2d_image(image_path)
-                    results.append({
+                    row = {
                         "filename": str(image_path.relative_to(input_folder)),
                         "raw_pixels": raw_pixels.flatten().tolist(),  # Flatten untuk simpan di Parquet
                         "mask": mask.flatten().tolist(),              # Flatten
                         "has_segmentation": has_seg,
                         "shape_h": raw_pixels.shape[0],
                         "shape_w": raw_pixels.shape[1],
-                    })
-                    print(f"✅ Processed: {image_path}")
+                    }
+                    # Append ke parquet yang sudah ada (atau buat baru)
+                    df_new = pd.DataFrame([row])
+                    if output_parquet.exists():
+                        df_old = pd.read_parquet(output_parquet)
+                        df_new = pd.concat([df_old, df_new], ignore_index=True)
+                    df_new.to_parquet(output_parquet)
+                    count += 1
+                    print(f"✅ Processed & saved: {image_path} (total {count})")
                 except Exception as e:
                     print(f"❌ Error {image_path}: {e}")
 
-    # Simpan ke Parquet
-    df = pd.DataFrame(results)
-    df.to_parquet(output_parquet)
-    print(f"📁 Saved to: {output_parquet} ({len(df)} files)")
+    print(f"📁 Saved to: {output_parquet.resolve()} ({count} files)")
 
 # --- MAIN ---
 if __name__ == "__main__":

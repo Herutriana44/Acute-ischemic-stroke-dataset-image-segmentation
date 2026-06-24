@@ -86,6 +86,9 @@ def process_all_images_to_parquet(input_folder: Path, output_parquet: Path):
     results = []
     input_folder = Path(input_folder)
 
+    if not input_folder.exists():
+        raise FileNotFoundError(f"Folder tidak ada: {input_folder.resolve()}")
+
     # Supported image extensions
     image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')
 

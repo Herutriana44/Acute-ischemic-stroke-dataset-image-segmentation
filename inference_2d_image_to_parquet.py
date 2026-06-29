@@ -1,18 +1,47 @@
 """
 Inference 2D image → Parquet (raw pixels + mask + has_segmentation)
 Input: gambar dari folder all_data_gambar (jpg, png, dll)
+
+Catatan anti-korupsi:
+    Versi lama menulis ulang (overwrite) file Parquet yang sama di SETIAP
+    iterasi loop (read_parquet -> concat -> to_parquet). Bila proses ter-
+    interupsi saat menulis, footer Parquet tidak lengkap dan SELURUH file
+    jadi rusak. Versi ini mengumpulkan baris lalu menulis sekali secara
+    atomik (lihat unet_segmentation/parquet_io.py), plus checkpoint atomik
+    berkala agar progres aman tanpa risiko korupsi.
 """
 
 import os
 from pathlib import Path
+
 import numpy as np
-import pandas as pd
+import pyarrow as pa
 import torch
 from PIL import Image
+
 from unet_segmentation.dicom_pipeline import postprocess_mask2d
+from unet_segmentation.parquet_io import atomic_write_table, relative_name, validate_parquet
+
+# Tulis checkpoint atomik tiap N gambar (0 = hanya sekali di akhir).
+# Setiap checkpoint adalah file Parquet lengkap & valid, jadi aman dari korupsi.
+# Untuk dataset sangat besar, set 0 agar tidak menulis ulang berulang.
+CHECKPOINT_EVERY = 50
+
+# Skema eksplisit & ringkas: konsisten antar-baris -> tidak ada schema drift.
+IMAGE_SCHEMA = pa.schema(
+    [
+        ("filename", pa.string()),
+        ("raw_pixels", pa.list_(pa.float32())),  # piksel di-flatten (panjang = H*W)
+        ("mask", pa.list_(pa.uint8())),           # mask biner di-flatten
+        ("has_segmentation", pa.bool_()),
+        ("shape_h", pa.int32()),
+        ("shape_w", pa.int32()),
+    ]
+)
 
 # --- LOAD MODEL ---
 MODEL_PATH = "unet_segmentation/models/unet_2d.pth"
+
 
 def load_model():
     """Load model U-Net 2D."""
@@ -42,7 +71,9 @@ def load_model():
         print(f"⚠️ Model tidak ditemukan di {MODEL_PATH}, gunakan model random.")
     return model
 
+
 model = load_model()
+
 
 # --- FUNGSI INFERENCE ---
 def infer_2d_image(image_path: Path) -> tuple[np.ndarray, np.ndarray, bool]:
@@ -78,10 +109,36 @@ def infer_2d_image(image_path: Path) -> tuple[np.ndarray, np.ndarray, bool]:
 
     return pixels, mask_binary, has_segmentation
 
+
+def _build_row(image_path: Path, input_folder: Path) -> dict:
+    """Jalankan inferensi satu gambar -> satu baris record sesuai IMAGE_SCHEMA."""
+    raw_pixels, mask, has_seg = infer_2d_image(image_path)
+    return {
+        "filename": relative_name(image_path, input_folder),
+        # astype memastikan tipe cocok dengan skema (float32 / uint8).
+        "raw_pixels": raw_pixels.astype(np.float32, copy=False).ravel().tolist(),
+        "mask": mask.astype(np.uint8, copy=False).ravel().tolist(),
+        "has_segmentation": bool(has_seg),
+        "shape_h": int(raw_pixels.shape[0]),
+        "shape_w": int(raw_pixels.shape[1]),
+    }
+
+
+def _save_atomic(records: list[dict], output_parquet: Path) -> None:
+    """Bangun Table dari records lalu tulis + validasi secara atomik."""
+    table = pa.Table.from_pylist(records, schema=IMAGE_SCHEMA)
+    atomic_write_table(table, output_parquet)
+    validate_parquet(output_parquet, expected_rows=len(records))
+
+
 # --- PROSES SEMUA GAMBAR DI FOLDER ---
 def process_all_images_to_parquet(input_folder: Path, output_parquet: Path):
     """
     Proses semua file gambar di `input_folder` (rekursif) → simpan ke Parquet.
+
+    Strategi anti-korupsi: kumpulkan baris di memori, tulis sekali di akhir
+    secara atomik. Checkpoint atomik berkala (CHECKPOINT_EVERY) menjaga
+    progres tanpa pernah meninggalkan file setengah jadi.
     """
     input_folder = Path(input_folder)
     output_parquet = Path(output_parquet)
@@ -92,33 +149,30 @@ def process_all_images_to_parquet(input_folder: Path, output_parquet: Path):
     # Supported image extensions
     image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')
 
+    records: list[dict] = []
     count = 0
     for root, _, files in os.walk(input_folder):
-        for file in files:
-            if file.lower().endswith(image_extensions):
-                image_path = Path(root) / file
-                try:
-                    raw_pixels, mask, has_seg = infer_2d_image(image_path)
-                    row = {
-                        "filename": str(image_path.relative_to(input_folder)),
-                        "raw_pixels": raw_pixels.flatten().tolist(),  # Flatten untuk simpan di Parquet
-                        "mask": mask.flatten().tolist(),              # Flatten
-                        "has_segmentation": has_seg,
-                        "shape_h": raw_pixels.shape[0],
-                        "shape_w": raw_pixels.shape[1],
-                    }
-                    # Append ke parquet yang sudah ada (atau buat baru)
-                    df_new = pd.DataFrame([row])
-                    if output_parquet.exists():
-                        df_old = pd.read_parquet(output_parquet)
-                        df_new = pd.concat([df_old, df_new], ignore_index=True)
-                    df_new.to_parquet(output_parquet)
-                    count += 1
-                    print(f"✅ Processed & saved: {image_path} (total {count})")
-                except Exception as e:
-                    print(f"❌ Error {image_path}: {e}")
+        for file in sorted(files):
+            if not file.lower().endswith(image_extensions):
+                continue
+            image_path = Path(root) / file
+            try:
+                records.append(_build_row(image_path, input_folder))
+                count += 1
+                print(f"✅ Processed: {image_path} (total {count})")
+                # Checkpoint atomik berkala (tiap checkpoint = file valid utuh).
+                if CHECKPOINT_EVERY and count % CHECKPOINT_EVERY == 0:
+                    _save_atomic(records, output_parquet)
+                    print(f"💾 Checkpoint atomik tersimpan ({count} baris).")
+            except Exception as e:
+                print(f"❌ Error {image_path}: {e}")
 
-    print(f"📁 Saved to: {output_parquet.resolve()} ({count} files)")
+    # Tulis final sekali secara atomik + validasi (deteksi korup lebih awal).
+    if not records:
+        print("⚠️ Tidak ada gambar yang berhasil diproses. Menulis Parquet kosong (skema tetap).")
+    _save_atomic(records, output_parquet)
+    print(f"📁 Saved to: {output_parquet.resolve()} ({count} files) — tervalidasi OK ✅")
+
 
 # --- MAIN ---
 if __name__ == "__main__":

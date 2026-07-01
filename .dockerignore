@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+*.egg-info
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project (keep out of image)
+api_runs
+*.log
+.env
+ngrok_tunnel.py
+
+# Large datasets / examples (not needed at runtime)
+dicom_example
+3D_model

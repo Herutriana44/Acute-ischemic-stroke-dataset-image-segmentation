@@ -30,6 +30,11 @@ JOB_TYPES = {
     "DICOM Series (ZIP/RAR/TAR)": "series",
 }
 
+MODEL_TYPES = {
+    "U-Net (ResNet34)": "unet",
+    "YOLO Segmentation": "yolo",
+}
+
 ACCEPTED_EXT = {
     "image":  ["png", "jpg", "jpeg", "bmp", "tif", "tiff", "webp"],
     "dicom":  ["dcm"],
@@ -69,13 +74,14 @@ def _download(job_id: str, filename: str) -> bytes | None:
         return None
 
 
-def submit_job(job_type: str, file_bytes: bytes, filename: str) -> dict | None:
+def submit_job(job_type: str, file_bytes: bytes, filename: str, model_type: str = "unet") -> dict | None:
     ep = {
         "image":  "/api/v1/jobs/submit-image",
         "dicom":  "/api/v1/jobs/submit-dicom",
         "series": "/api/v1/jobs/submit-series",
     }
-    return _post_file(ep[job_type], file_bytes, filename)
+    path = f"{ep[job_type]}?model_type={model_type}"
+    return _post_file(path, file_bytes, filename)
 
 
 def get_job(job_id: str) -> dict | None:
@@ -165,6 +171,10 @@ with tab_submit:
         job_type_label = st.selectbox("Tipe Job", list(JOB_TYPES.keys()))
         job_type = JOB_TYPES[job_type_label]
 
+        model_type = "unet"
+        model_label = st.selectbox("Model", list(MODEL_TYPES.keys()))
+        model_type = MODEL_TYPES[model_label]
+
         uploaded = st.file_uploader(
             f"Pilih file ({', '.join(ACCEPTED_EXT[job_type])})",
             type=ACCEPTED_EXT[job_type],
@@ -182,7 +192,7 @@ with tab_submit:
             if st.button("🚀 Submit Job", type="primary", use_container_width=True):
                 file_bytes = uploaded.read()
                 with st.spinner("Mengirim..."):
-                    res = submit_job(job_type, file_bytes, uploaded.name)
+                    res = submit_job(job_type, file_bytes, uploaded.name, model_type=model_type)
                 if not res:
                     st.error("Gagal submit. Periksa koneksi API.")
                 elif "error" in res:

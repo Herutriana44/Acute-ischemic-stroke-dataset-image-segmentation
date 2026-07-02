@@ -23,6 +23,7 @@ COPY . .
 
 # ── Runtime ────────────────────────────────────────────────────────
 ENV MODEL_PATH=/app/best_unet.pt
+ENV YOLO_MODEL_PATH=/app/yolo_best.pt
 ENV API_RUNS_DIR=/app/api_runs
 ENV PYTHONUNBUFFERED=1
 

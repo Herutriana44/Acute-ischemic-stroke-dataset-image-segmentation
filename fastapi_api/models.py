@@ -26,6 +26,12 @@ class JobType(str, enum.Enum):
     SERIES = "series"
 
 
+class ModelType(str, enum.Enum):
+    """Model architecture for inference."""
+    UNET = "unet"
+    YOLO = "yolo"
+
+
 class JobSubmitRequest(BaseModel):
     """Request to submit a new inference job."""
     # No fields for now — file upload handled via FastAPI's UploadFile

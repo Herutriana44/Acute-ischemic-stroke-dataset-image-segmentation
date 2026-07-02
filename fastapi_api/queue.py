@@ -13,7 +13,7 @@ from pathlib import Path
 from queue import Queue
 from typing import Callable, Optional
 
-from fastapi_api.models import JobStatus, JobType
+from fastapi_api.models import JobStatus, JobType, ModelType
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class Job:
     status: JobStatus
     input_path: str
     created_at: datetime
+    model_type: ModelType = ModelType.UNET
     completed_at: Optional[datetime] = None
     result: Optional[dict] = None
     error_message: Optional[str] = None
@@ -53,8 +54,9 @@ class JobQueue:
     to avoid GPU memory contention.
     """
 
-    def __init__(self, model_path: Path, runs_dir: Path, num_workers: int = 1):
+    def __init__(self, model_path: Path, runs_dir: Path, num_workers: int = 1, yolo_model_path: Path | None = None):
         self._model_path = model_path
+        self._yolo_model_path = yolo_model_path or model_path
         self._runs_dir = runs_dir
         self._num_workers = num_workers
         self._gpu_available: Optional[bool] = None  # determined on first use
@@ -85,7 +87,7 @@ class JobQueue:
     def _new_job_id(self) -> str:
         return uuid.uuid4().hex[:12]
 
-    def submit(self, job_type: JobType, input_path: str) -> str:
+    def submit(self, job_type: JobType, input_path: str, model_type: ModelType = ModelType.UNET) -> str:
         """Submit a new inference job. Returns job_id immediately."""
         job = Job(
             job_id=self._new_job_id(),
@@ -93,6 +95,7 @@ class JobQueue:
             status=JobStatus.PENDING,
             input_path=input_path,
             created_at=datetime.utcnow(),
+            model_type=model_type,
         )
         with self._lock:
             self._jobs[job.job_id] = job
@@ -167,11 +170,14 @@ class JobQueue:
             self._queue.task_done()
 
     def _process_job(self, job: Job) -> None:
-        """Route job to appropriate inference function based on job_type."""
+        """Route job to appropriate inference function based on job_type and model_type."""
         from fastapi_api.inference_adapter import (
             infer_dicom_series,
+            infer_dicom_series_yolo,
             infer_single_dicom,
+            infer_single_dicom_yolo,
             infer_2d_image,
+            infer_2d_image_yolo,
         )
 
         device = self.device
@@ -179,29 +185,56 @@ class JobQueue:
         run_id = job.job_id
 
         if job.job_type == JobType.SERIES:
-            result = infer_dicom_series(
-                archive_path=input_path,
-                run_id=run_id,
-                model_path=self._model_path,
-                runs_dir=self._runs_dir,
-                device=device,
-            )
+            if job.model_type == ModelType.YOLO:
+                result = infer_dicom_series_yolo(
+                    archive_path=input_path,
+                    run_id=run_id,
+                    model_path=self._yolo_model_path,
+                    runs_dir=self._runs_dir,
+                    device=device,
+                )
+            else:
+                result = infer_dicom_series(
+                    archive_path=input_path,
+                    run_id=run_id,
+                    model_path=self._model_path,
+                    runs_dir=self._runs_dir,
+                    device=device,
+                )
         elif job.job_type == JobType.DICOM:
-            result = infer_single_dicom(
-                dicom_path=input_path,
-                run_id=run_id,
-                model_path=self._model_path,
-                runs_dir=self._runs_dir,
-                device=device,
-            )
+            if job.model_type == ModelType.YOLO:
+                result = infer_single_dicom_yolo(
+                    dicom_path=input_path,
+                    run_id=run_id,
+                    model_path=self._yolo_model_path,
+                    runs_dir=self._runs_dir,
+                    device=device,
+                )
+            else:
+                result = infer_single_dicom(
+                    dicom_path=input_path,
+                    run_id=run_id,
+                    model_path=self._model_path,
+                    runs_dir=self._runs_dir,
+                    device=device,
+                )
         elif job.job_type == JobType.IMAGE:
-            result = infer_2d_image(
-                image_path=input_path,
-                run_id=run_id,
-                model_path=self._model_path,
-                runs_dir=self._runs_dir,
-                device=device,
-            )
+            if job.model_type == ModelType.YOLO:
+                result = infer_2d_image_yolo(
+                    image_path=input_path,
+                    run_id=run_id,
+                    model_path=self._yolo_model_path,
+                    runs_dir=self._runs_dir,
+                    device=device,
+                )
+            else:
+                result = infer_2d_image(
+                    image_path=input_path,
+                    run_id=run_id,
+                    model_path=self._model_path,
+                    runs_dir=self._runs_dir,
+                    device=device,
+                )
         else:
             raise ValueError(f"Unknown job type: {job.job_type}")
 

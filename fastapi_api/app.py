@@ -25,7 +25,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from fastapi_api.models import JobType
+from fastapi_api.models import JobType, ModelType
 from fastapi_api.queue import JobQueue
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -34,6 +34,7 @@ logger = logging.getLogger("fastapi_api")
 # ── Paths ──────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MODEL_PATH = Path(os.getenv("MODEL_PATH", PROJECT_ROOT / "best_unet.pt"))
+YOLO_MODEL_PATH = Path(os.getenv("YOLO_MODEL_PATH", PROJECT_ROOT / "yolo_best.pt"))
 RUNS_DIR = Path(os.getenv("API_RUNS_DIR", PROJECT_ROOT / "api_runs"))
 UPLOAD_TMP = RUNS_DIR / "_uploads"
 
@@ -52,7 +53,7 @@ async def lifespan(app: FastAPI):
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_TMP.mkdir(parents=True, exist_ok=True)
 
-    job_queue = JobQueue(model_path=MODEL_PATH, runs_dir=RUNS_DIR, num_workers=1)
+    job_queue = JobQueue(model_path=MODEL_PATH, runs_dir=RUNS_DIR, num_workers=1, yolo_model_path=YOLO_MODEL_PATH)
     job_queue.start()
     logger.info("FastAPI inference API ready. Model: %s | Runs: %s", MODEL_PATH, RUNS_DIR)
     logger.info("GPU available: %s | device: %s", job_queue.gpu_available, job_queue.device)
@@ -111,36 +112,60 @@ def create_app() -> FastAPI:
 
     # ── Submit endpoints ───────────────────────────────────────────────
     @app.post("/api/v1/jobs/submit-image")
-    async def submit_image(file: UploadFile = File(...)):
-        """Submit a 2D image for inference. Returns job_id immediately."""
+    async def submit_image(
+        file: UploadFile = File(...),
+        model_type: str = "unet",
+    ):
+        """Submit a 2D image for inference. Returns job_id immediately.
+
+        Query params:
+        - model_type: 'unet' (default) or 'yolo'
+        """
         q = _get_queue()
         saved = _save_upload(file, IMAGE_SUFFIXES)
-        job_id = q.submit(JobType.IMAGE, str(saved))
+        mt = ModelType.YOLO if model_type.lower() == "yolo" else ModelType.UNET
+        job_id = q.submit(JobType.IMAGE, str(saved), model_type=mt)
         return JSONResponse(
             status_code=202,
-            content={"job_id": job_id, "status": "pending", "job_type": "image"},
+            content={"job_id": job_id, "status": "pending", "job_type": "image", "model_type": mt.value},
         )
 
     @app.post("/api/v1/jobs/submit-dicom")
-    async def submit_dicom(file: UploadFile = File(...)):
-        """Submit a single DICOM (.dcm) file for inference. Returns job_id immediately."""
+    async def submit_dicom(
+        file: UploadFile = File(...),
+        model_type: str = "unet",
+    ):
+        """Submit a single DICOM (.dcm) file for inference. Returns job_id immediately.
+
+        Query params:
+        - model_type: 'unet' (default) or 'yolo'
+        """
         q = _get_queue()
         saved = _save_upload(file, {".dcm"})
-        job_id = q.submit(JobType.DICOM, str(saved))
+        mt = ModelType.YOLO if model_type.lower() == "yolo" else ModelType.UNET
+        job_id = q.submit(JobType.DICOM, str(saved), model_type=mt)
         return JSONResponse(
             status_code=202,
-            content={"job_id": job_id, "status": "pending", "job_type": "dicom"},
+            content={"job_id": job_id, "status": "pending", "job_type": "dicom", "model_type": mt.value},
         )
 
     @app.post("/api/v1/jobs/submit-series")
-    async def submit_series(file: UploadFile = File(...)):
-        """Submit a DICOM series (ZIP/archive) for inference. Returns job_id immediately."""
+    async def submit_series(
+        file: UploadFile = File(...),
+        model_type: str = "unet",
+    ):
+        """Submit a DICOM series (ZIP/archive) for inference. Returns job_id immediately.
+
+        Query params:
+        - model_type: 'unet' (default) or 'yolo'
+        """
         q = _get_queue()
         saved = _save_upload(file, ARCHIVE_SUFFIXES)
-        job_id = q.submit(JobType.SERIES, str(saved))
+        mt = ModelType.YOLO if model_type.lower() == "yolo" else ModelType.UNET
+        job_id = q.submit(JobType.SERIES, str(saved), model_type=mt)
         return JSONResponse(
             status_code=202,
-            content={"job_id": job_id, "status": "pending", "job_type": "series"},
+            content={"job_id": job_id, "status": "pending", "job_type": "series", "model_type": mt.value},
         )
 
     # ── Query endpoints ────────────────────────────────────────────────

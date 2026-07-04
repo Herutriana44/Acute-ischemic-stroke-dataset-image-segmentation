@@ -1,53 +1,55 @@
 
 import os
 import time
+import requests
 import pandas as pd
+import base64
 from pathlib import Path
-# Install gradio_client if you haven't already: pip install gradio_client
-from gradio_client import Client, file
-import requests # Still needed for potential API error handling or other requests
 
-# Hugging Face Gradio Space URL
-HF_SPACE_URL = "https://herutriana44-acute-ischemic-stroke-segmentation.hf.space"
+# Hugging Face API endpoint
+API_URL = "https://herutriana44-acute-ischemic-stroke-segmentation.hf.space/run/predict"
 
 # Rate limiting settings
 RATE_LIMIT_DELAY = 1  # seconds between requests to avoid hitting limits
 
-# Initialize Gradio Client
-client = Client(HF_SPACE_URL)
-
 def infer_image_from_api(image_path: Path) -> dict:
     """
-    Sends an image to the Hugging Face Gradio Space for inference using gradio_client.
+    Sends an image to the Hugging Face API for inference and returns the prediction result.
     """
     try:
-        # The `predict` method will automatically handle the file upload and API interaction
-        # We need to know the correct API name for the specific Gradio function
-        # from the HF space. For many simple Gradio apps, it's the first function (fn_idx=0).
-        # We can also inspect the /api endpoint of the Gradio app to find function names.
-        # Given the previous issues, it's safer to check the API endpoint for exact function.
+        with open(image_path, "rb") as f:
+            data = f.read()
 
-        # Let's assume for now it's the main prediction function (fn_idx=0)
-        # and it expects a file path as input.
-        result = client.predict(
-            file(str(image_path)), # Gradio Client expects `file()` for local files
-            api_name="/predict"  # Or use fn_idx=0 if /predict is not the exact endpoint
-                                 # We need to confirm the API name from the docs or inspecting the space.
-        )
+        # Base64 encode the image
+        encoded_image = base64.b64encode(data).decode('utf-8')
 
-        # The result structure depends on the Gradio app's output components.
-        # From the HF space demo, the output seems to be two components: an image and text.
-        # We need the text part, which indicates the prediction.
-        # If the result is a list, assume the text prediction is the second element.
-        if isinstance(result, list) and len(result) > 1:
-            prediction_text = result[1] # Assuming text prediction is at index 1
+        # Gradio API usually expects JSON with a 'data' field containing inputs.
+        # For image, it's typically base64 encoded with a data URI prefix.
+        # NOTE: The prefix 'data:image/png;base64,' assumes PNG. Adjust if other formats are needed.
+        # For a more robust solution, dynamically determine the image type.
+        payload = {"data": [f"data:image/png;base64,{encoded_image}"]}
+        headers = {"Content-Type": "application/json"}
+
+        response = requests.post(API_URL, headers=headers, json=payload)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        result = response.json()
+
+        # The documentation for this specific API, based on the Gradio UI,
+        # suggests the output might be in result['data'][1] for the text prediction.
+        # If the Gradio app has multiple outputs, they appear as elements in 'data' list.
+        if result and 'data' in result and isinstance(result['data'], list) and len(result['data']) > 1:
+            prediction_text = result['data'][1]
         else:
-            prediction_text = str(result) # Fallback if structure is different
+            print(f"⚠️ Unexpected API response format for {image_path}: {result}")
+            prediction_text = "N/A - Unexpected API response"
 
         return {"status": "success", "prediction": prediction_text}
+    except requests.exceptions.RequestException as e:
+        print(f"❌ API request failed for {image_path}: {e}")
+        return {"status": "error", "prediction": f"API Error: {e}"}
     except Exception as e:
-        print(f"❌ Inference failed for {image_path} using gradio_client: {e}")
-        return {"status": "error", "prediction": f"Client Error: {e}"}
+        print(f"❌ An unexpected error occurred for {image_path}: {e}")
+        return {"status": "error", "prediction": f"Unexpected Error: {e}"}
 
 
 def process_images_to_csv(input_folder: Path, output_csv: Path):
@@ -66,11 +68,11 @@ def process_images_to_csv(input_folder: Path, output_csv: Path):
     count = 0
 
     for root, _, files in os.walk(input_folder):
-        for file_name in sorted(files): # Renamed 'file' to 'file_name' to avoid conflict with gradio_client.file
-            if not file_name.lower().endswith(image_extensions):
+        for file in sorted(files):
+            if not file.lower().endswith(image_extensions):
                 continue
 
-            image_path = Path(root) / file_name
+            image_path = Path(root) / file
             print(f"Processing: {image_path}")
 
             inference_result = infer_image_from_api(image_path)

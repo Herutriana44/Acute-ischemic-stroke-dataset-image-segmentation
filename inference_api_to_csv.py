@@ -5,16 +5,17 @@ import pandas as pd
 from pathlib import Path
 from gradio_client import Client, file # Removed requests and base64
 
-# Hugging Face Gradio Space URL
-HF_SPACE_URL = "https://herutriana44-acute-ischemic-stroke-segmentation.hf.space"
+# Hugging Face Gradio Space ID
+HF_SPACE_ID = "herutriana44/acute-ischemic-stroke-segmentation"
 
 # Rate limiting settings
 RATE_LIMIT_DELAY = 1  # seconds between requests to avoid hitting limits
 
 # Initialize Gradio Client
 # You need to install gradio_client: pip install gradio_client
+client = None
 try:
-    client = Client(HF_SPACE_URL)
+    client = Client(HF_SPACE_ID)
     # Print API details to help identify the correct api_name
     print("--- Available API endpoints ---")
     client.view_api()
@@ -26,6 +27,9 @@ def infer_image_from_api(image_path: Path) -> dict:
     """
     Sends an image to the Hugging Face Gradio Space for inference using gradio_client.
     """
+    if client is None:
+        return {"status": "error", "prediction": "Client not initialized"}
+
     try:
         # REPLACE '/predict' with the correct api_name found in the output above
         result = client.predict(

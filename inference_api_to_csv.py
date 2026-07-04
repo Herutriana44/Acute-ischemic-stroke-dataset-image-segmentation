@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 
 # Hugging Face API endpoint
-API_URL = "https://herutriana44-acute-ischemic-stroke-segmentation.hf.space/run/predict"
+API_URL = "https://herutriana44-acute-ischemic-stroke-segmentation.hf.space/inference"
 
 # Rate limiting settings
 RATE_LIMIT_DELAY = 1  # seconds between requests to avoid hitting limits
@@ -18,46 +18,30 @@ def infer_image_from_api(image_path: Path) -> dict:
     with open(image_path, "rb") as f:
         data = f.read()
 
-    headers = {"Content-Type": "image/jpeg"} # Assuming JPEG, adjust if other types are sent
-
-    # The API expects a specific format. Referencing the /docs:
-    # It seems to be a Gradio API. The /predict endpoint usually expects JSON with 'data' field.
-    # The 'data' field will contain a list of inputs. For image, it's typically base64 encoded.
-    # However, the example on the /docs shows a direct file upload in the UI.
-    # For programmatic access, we often need to mimic the 'upload' component.
-    # Let's try sending it as a file directly first, as a common pattern for Gradio.
-
-    # Gradio API usually expects files to be sent as part of a list in 'data' field within a JSON payload
-    # Or, it could be a simple POST request with the image file itself.
-    # Based on the documentation, it might expect a base64 encoded image in a JSON payload.
-
-    # Let's assume the API expects a multipart/form-data for file upload if not JSON base64.
-    # Or, a JSON payload like {'data': ['data:image/jpeg;base64,...']}
-
-    # For now, let's try a simple POST with files dict, mimicking a form submission.
-    # If this fails, we'll need to inspect the network request from the HF space or try base64.
-
-    # From the Gradio API docs, it's usually `data: [image_base64_string, ...]`.
-    # Let's encode the image to base64.
-    import base64
-    encoded_image = base64.b64encode(data).decode('utf-8')
-    payload = {"data": [f"data:image/jpeg;base64,{encoded_image}"]}
+    # The /inference endpoint for many Gradio APIs expects a direct file upload.
+    # We will send the image using a 'files' dictionary.
+    files = {'file': (image_path.name, data, 'image/png')} # Adjust content type if needed
 
     try:
-        response = requests.post(API_URL, json=payload)
+        # We remove headers and json payload, and use 'files' instead.
+        response = requests.post(API_URL, files=files)
         response.raise_for_status()  # Raise an exception for HTTP errors
-        result = response.json()
-        # The documentation states the output is a list of [label, confidence] or similar.
-        # Example output for an image segmentation API is usually a base64 mask or classification.
-        # From the HF space demo, the output seems to be two components: an image and text.
-        # We need the text part, which indicates the prediction.
-        # Assuming the structure is result['data'][1] for the text prediction.
-        if result and 'data' in result and len(result['data']) > 1:
-            prediction_text = result['data'][1] # This is a guess based on typical Gradio output
-            return {"status": "success", "prediction": prediction_text}
-        else:
-            print(f"⚠️ Unexpected API response format for {image_path}: {result}")
-            return {"status": "error", "prediction": "N/A - Unexpected API response"}
+
+        # The response from a direct file upload to a Gradio /inference endpoint
+        # might be the direct prediction, not wrapped in a JSON 'data' field.
+        # It could be JSON, a file, or plain text depending on the API's output components.
+        # Let's try to parse as JSON first, and if not, treat as text.
+        try:
+            result = response.json()
+            # If JSON, we still guess the structure might contain the relevant info.
+            # This part is highly dependent on the specific API's return value.
+            # If the primary output is a classification or text, it could be a simple value.
+            prediction_text = result
+        except requests.exceptions.JSONDecodeError:
+            # If it's not JSON, it might be plain text.
+            prediction_text = response.text
+
+        return {"status": "success", "prediction": prediction_text}
     except requests.exceptions.RequestException as e:
         print(f"❌ API request failed for {image_path}: {e}")
         return {"status": "error", "prediction": f"API Error: {e}"}

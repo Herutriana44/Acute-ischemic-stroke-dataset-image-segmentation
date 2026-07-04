@@ -1,102 +1,72 @@
-
 import os
 import time
+import requests
 import pandas as pd
+import base64
 from pathlib import Path
-from gradio_client import Client, file # Removed requests and base64
 
-# Hugging Face Gradio Space ID
-HF_SPACE_ID = "herutriana44/acute-ischemic-stroke-segmentation"
+# Hugging Face Space URL
+BASE_URL = "https://herutriana44-acute-ischemic-stroke-segmentation.hf.space"
+PREDICT_URL = f"{BASE_URL}/run/predict"
+RESULT_URL = f"{BASE_URL}/result"
 
 # Rate limiting settings
-RATE_LIMIT_DELAY = 1  # seconds between requests to avoid hitting limits
-
-# Initialize Gradio Client
-# You need to install gradio_client: pip install gradio_client
-client = None
-try:
-    client = Client(HF_SPACE_ID)
-    # Print API details to help identify the correct api_name
-    print("--- Available API endpoints ---")
-    client.view_api()
-    print("-------------------------------")
-except Exception as e:
-    print(f"❌ Failed to initialize client: {e}")
+RATE_LIMIT_DELAY = 2  # Increased to be safer
+WAIT_TIME = 60        # Seconds to wait for async job
 
 def infer_image_from_api(image_path: Path) -> dict:
     """
-    Sends an image to the Hugging Face Gradio Space for inference using gradio_client.
+    Submits image via requests, waits, then polls for result.
     """
-    if client is None:
-        return {"status": "error", "prediction": "Client not initialized"}
-
     try:
-        # REPLACE '/predict' with the correct api_name found in the output above
-        result = client.predict(
-            file(str(image_path)),
-            api_name="/predict"
-        )
+        with open(image_path, "rb") as f:
+            data = f.read()
 
-        # The result structure depends on the Gradio app's output components.
-        # Based on the HF Space demo, the output seems to be two components: an image and text.
-        # We need the text part, which indicates the prediction.
-        # If the result is a list, assume the text prediction is the second element.
-        # If not, convert the whole result to string.
-        if isinstance(result, list) and len(result) > 1:
-            prediction_text = result[1] # Assuming text prediction is at index 1
-        else:
-            prediction_text = str(result)
+        encoded_image = base64.b64encode(data).decode('utf-8')
+        payload = {"data": [f"data:image/png;base64,{encoded_image}"]}
 
-        return {"status": "success", "prediction": prediction_text}
+        # 1. Submit Job
+        print(f"Submitting {image_path.name}...")
+        response = requests.post(PREDICT_URL, json=payload)
+        response.raise_for_status()
+        job_info = response.json()
+
+        # 2. Wait
+        print(f"Waiting {WAIT_TIME}s for job...")
+        time.sleep(WAIT_TIME)
+
+        # 3. Get Result
+        job_hash = job_info.get("hash")
+        if not job_hash:
+            return {"status": "error", "prediction": "No job hash returned"}
+
+        res = requests.post(RESULT_URL, json={"hash": job_hash})
+        res.raise_for_status()
+        result_data = res.json()
+
+        return {"status": "success", "prediction": str(result_data.get("data", "No result"))}
+
     except Exception as e:
-        print(f"❌ Inference failed for {image_path} using gradio_client: {e}")
-        return {"status": "error", "prediction": f"Client Error: {e}"}
-
+        return {"status": "error", "prediction": str(e)}
 
 def process_images_to_csv(input_folder: Path, output_csv: Path):
-    """
-    Processes all image files in `input_folder`, sends them to the API for inference,
-    and saves the results to a CSV file.
-    """
     input_folder = Path(input_folder)
     output_csv = Path(output_csv)
-
-    if not input_folder.exists():
-        raise FileNotFoundError(f"Folder tidak ada: {input_folder.resolve()}")
-
     image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')
     results = []
-    count = 0
 
     for root, _, files in os.walk(input_folder):
-        for file_name in sorted(files): # Renamed 'file' to 'file_name' to avoid conflict with gradio_client.file
+        for file_name in sorted(files):
             if not file_name.lower().endswith(image_extensions):
                 continue
-
             image_path = Path(root) / file_name
-            print(f"Processing: {image_path}")
-
+            print(f"Processing: {image_path.name}")
             inference_result = infer_image_from_api(image_path)
-            results.append({
-                "input_filename": image_path.name,
-                "prediction": inference_result["prediction"]
-            })
-            count += 1
-            print(f"✅ Processed {image_path.name} (prediction: {inference_result['prediction']})")
-
-            # Apply rate limiting
+            results.append({"input_filename": image_path.name, "prediction": inference_result["prediction"]})
             time.sleep(RATE_LIMIT_DELAY)
 
-    if not results:
-        print("⚠️ Tidak ada gambar yang berhasil diproses.")
-    else:
-        df = pd.DataFrame(results)
-        df.to_csv(output_csv, index=False)
-        print(f"📁 Saved inference results to: {output_csv.resolve()} ({count} files) ✅")
-
+    pd.DataFrame(results).to_csv(output_csv, index=False)
+    print(f"Done. Saved to {output_csv}")
 
 if __name__ == "__main__":
-    INPUT_FOLDER = Path("all_data_gambar")  # Folder containing images
-    OUTPUT_CSV = Path("inference_api_results.csv")
-
-    process_images_to_csv(INPUT_FOLDER, OUTPUT_CSV)
+    process_images_to_csv(Path("all_data_gambar"), Path("inference_api_results.csv"))

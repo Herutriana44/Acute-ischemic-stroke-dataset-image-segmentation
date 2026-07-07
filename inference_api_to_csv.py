@@ -15,9 +15,10 @@ RATE_LIMIT_DELAY = 2  # Increased to be safer
 WAIT_TIME = 60        # Seconds to wait for async job
 BATCH_SIZE = 5        # Export CSV every 5 rows
 
-def infer_image_from_api(image_path: Path) -> dict:
+def infer_image_from_api(image_path: Path) -> bool:
     """
     Submits image via requests, waits, then polls for result.
+    Returns True if lesion detected (prediction exists), False otherwise.
     """
     try:
         with open(image_path, "rb") as f:
@@ -39,16 +40,19 @@ def infer_image_from_api(image_path: Path) -> dict:
         # 3. Get Result
         job_hash = job_info.get("hash")
         if not job_hash:
-            return {"status": "error", "prediction": "No job hash returned"}
+            return False
 
         res = requests.post(RESULT_URL, json={"hash": job_hash})
         res.raise_for_status()
         result_data = res.json()
 
-        return {"status": "success", "prediction": str(result_data.get("data", "No result"))}
+        prediction = result_data.get("data", "")
+        # If prediction is non-empty and not an error message, lesion exists
+        return bool(prediction and prediction != "No result")
 
     except Exception as e:
-        return {"status": "error", "prediction": str(e)}
+        print(f"Error: {e}")
+        return False
 
 def process_images_to_csv(input_folder: Path, output_folder: Path = Path("csv_result")):
     input_folder = Path(input_folder)
@@ -65,8 +69,8 @@ def process_images_to_csv(input_folder: Path, output_folder: Path = Path("csv_re
                 continue
             image_path = Path(root) / file_name
             print(f"Processing: {image_path.name}")
-            inference_result = infer_image_from_api(image_path)
-            results.append({"input_filename": image_path.name, "prediction": inference_result["prediction"]})
+            is_lesion = infer_image_from_api(image_path)
+            results.append({"filename": image_path.name, "isLesion": is_lesion})
             row_count += 1
 
             # Export CSV every 5 rows

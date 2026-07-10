@@ -30,11 +30,6 @@ JOB_TYPES = {
     "DICOM Series (ZIP/RAR/TAR)": "series",
 }
 
-MODEL_TYPES = {
-    "U-Net (ResNet34)": "unet",
-    "YOLO Segmentation": "yolo",
-}
-
 ACCEPTED_EXT = {
     "image":  ["png", "jpg", "jpeg", "bmp", "tif", "tiff", "webp"],
     "dicom":  ["dcm"],
@@ -74,13 +69,18 @@ def _download(job_id: str, filename: str) -> bytes | None:
         return None
 
 
-def submit_job(job_type: str, file_bytes: bytes, filename: str, model_type: str = "unet") -> dict | None:
+def get_models() -> list[dict]:
+    data = _get("/api/v1/models")
+    return data.get("models", []) if isinstance(data, dict) else []
+
+
+def submit_job(job_type: str, file_bytes: bytes, filename: str, model_id_or_path: str = "unet") -> dict | None:
     ep = {
         "image":  "/api/v1/jobs/submit-image",
         "dicom":  "/api/v1/jobs/submit-dicom",
         "series": "/api/v1/jobs/submit-series",
     }
-    path = f"{ep[job_type]}?model_type={model_type}"
+    path = f"{ep[job_type]}?model_id_or_path={model_id_or_path}"
     return _post_file(path, file_bytes, filename)
 
 
@@ -129,10 +129,13 @@ with st.sidebar:
         gpu = h.get("gpu_available", h.get("device", "N/A"))
         st.caption(f"GPU/Device: {gpu}")
 
-    if st.button("📊 Refresh Stats", use_container_width=True):
+    if st.button("📊 Refresh Stats & Models", use_container_width=True):
         s = get_stats()
         if s:
             st.session_state.stats = s
+        m = get_models()
+        if m:
+            st.session_state.models_list = m
 
     if "stats" in st.session_state:
         s = st.session_state.stats
@@ -171,9 +174,19 @@ with tab_submit:
         job_type_label = st.selectbox("Tipe Job", list(JOB_TYPES.keys()))
         job_type = JOB_TYPES[job_type_label]
 
-        model_type = "unet"
-        model_label = st.selectbox("Model", list(MODEL_TYPES.keys()))
-        model_type = MODEL_TYPES[model_label]
+        # Load models from API
+        if "models_list" not in st.session_state:
+            with st.spinner("Loading models..."):
+                st.session_state.models_list = get_models()
+
+        models = st.session_state.models_list
+        if not models:
+            st.warning("Tidak bisa load model dari API")
+            model_id_or_path = "unet"
+        else:
+            model_names = [f"{m.get('name', m.get('path', 'unknown'))} ({m.get('source', '?')})" for m in models]
+            selected_idx = st.selectbox("Model", range(len(model_names)), format_func=lambda i: model_names[i])
+            model_id_or_path = models[selected_idx].get("path") or models[selected_idx].get("repo_id") or "unet"
 
         uploaded = st.file_uploader(
             f"Pilih file ({', '.join(ACCEPTED_EXT[job_type])})",
@@ -192,7 +205,7 @@ with tab_submit:
             if st.button("🚀 Submit Job", type="primary", use_container_width=True):
                 file_bytes = uploaded.read()
                 with st.spinner("Mengirim..."):
-                    res = submit_job(job_type, file_bytes, uploaded.name, model_type=model_type)
+                    res = submit_job(job_type, file_bytes, uploaded.name, model_id_or_path=model_id_or_path)
                 if not res:
                     st.error("Gagal submit. Periksa koneksi API.")
                 elif "error" in res:

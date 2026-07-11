@@ -324,11 +324,22 @@ with tab_detail:
             run_id = result.get("run_id", cur_id)
 
             # Tampilkan gambar hasil
-            file_map = [
-                ("Input Asli",  result.get("original_png",  result.get("input_name",  "input.png"))),
-                ("Mask Prediksi", result.get("mask_png",    "mask_pred.png")),
-                ("Overlay",     result.get("overlay_png",   "overlay.png")),
-            ]
+            # Determine model type from result
+            model_type = result.get("model_type", "unet")
+
+            # File map based on model type
+            if model_type == "yolo":
+                file_map = [
+                    ("Input Asli",  result.get("original_png",  result.get("input_name",  "input.png"))),
+                    ("Overlay",     result.get("overlay_png",   "overlay.png")),
+                    ("Bounding Boxes", result.get("bboxes_json",   "bboxes.json")),
+                ]
+            else:
+                file_map = [
+                    ("Input Asli",  result.get("original_png",  result.get("input_name",  "input.png"))),
+                    ("Mask Prediksi", result.get("mask_png",    "mask_pred.png")),
+                    ("Overlay",     result.get("overlay_png",   "overlay.png")),
+                ]
 
             img_cols = st.columns(3)
             for idx, (label, fname) in enumerate(file_map):
@@ -337,7 +348,12 @@ with tab_detail:
                     raw = _download(run_id, fname)
                     if raw:
                         try:
-                            st.image(Image.open(io.BytesIO(raw)), use_container_width=True)
+                            if fname.endswith(".json"):
+                                import json
+                                bboxes_data = json.loads(raw.decode("utf-8"))
+                                st.json(bboxes_data)
+                            else:
+                                st.image(Image.open(io.BytesIO(raw)), use_container_width=True)
                         except Exception:
                             st.warning(f"Tidak bisa tampilkan {fname}")
                     else:
@@ -345,14 +361,28 @@ with tab_detail:
 
             # Metrics
             st.divider()
-            m1, m2, m3 = st.columns(3)
-            with m1:
-                st.metric("Lesion Pixels", result.get("lesion_pixels", "N/A"))
-            with m2:
-                shape = result.get("shape_hw", [])
-                st.metric("Shape (H×W)", f"{shape[0]}×{shape[1]}" if len(shape) == 2 else "N/A")
-            with m3:
-                st.metric("Job Type", job.get("job_type", "N/A"))
+            model_type = result.get("model_type", "unet")
+
+            if model_type == "yolo":
+                # For YOLO detection, show bounding box metrics
+                m1, m2, m3 = st.columns(3)
+                with m1:
+                    st.metric("Detections", result.get("detection_count", "N/A"))
+                with m2:
+                    st.metric("Avg Confidence", f"{result.get('avg_confidence', 0):.2f}")
+                with m3:
+                    shape = result.get("shape_hw", [])
+                    st.metric("Shape (H×W)", f"{shape[0]}×{shape[1]}" if len(shape) == 2 else "N/A")
+            else:
+                # For UNet segmentation, show lesion metrics
+                m1, m2, m3 = st.columns(3)
+                with m1:
+                    st.metric("Lesion Pixels", result.get("lesion_pixels", "N/A"))
+                with m2:
+                    shape = result.get("shape_hw", [])
+                    st.metric("Shape (H×W)", f"{shape[0]}×{shape[1]}" if len(shape) == 2 else "N/A")
+                with m3:
+                    st.metric("Job Type", job.get("job_type", "N/A"))
 
             # Tombol download
             st.divider()
@@ -362,11 +392,12 @@ with tab_detail:
                 with dl_cols[idx]:
                     raw = _download(run_id, fname)
                     if raw:
+                        mime_type = "application/json" if fname.endswith(".json") else "image/png"
                         st.download_button(
                             label=f"⬇️ {label}",
                             data=raw,
                             file_name=fname,
-                            mime="image/png",
+                            mime=mime_type,
                             use_container_width=True,
                         )
 

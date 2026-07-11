@@ -186,7 +186,10 @@ with tab_submit:
         else:
             model_names = [f"{m.get('name', m.get('path', 'unknown'))} ({m.get('source', '?')})" for m in models]
             selected_idx = st.selectbox("Model", range(len(model_names)), format_func=lambda i: model_names[i])
-            model_id_or_path = models[selected_idx].get("path") or models[selected_idx].get("repo_id") or "unet"
+            model = models[selected_idx]
+            repo_id = model.get("repo_id", "")
+            filename = model.get("filename", "")
+            model_id_or_path = f"{repo_id}/{filename}" if repo_id and filename else "unet"
 
         uploaded = st.file_uploader(
             f"Pilih file ({', '.join(ACCEPTED_EXT[job_type])})",

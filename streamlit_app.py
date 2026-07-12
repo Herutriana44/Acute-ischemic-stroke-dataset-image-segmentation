@@ -105,6 +105,11 @@ def status_icon(status: str) -> str:
     return {"pending": "🟡", "running": "🔵", "completed": "🟢", "failed": "🔴"}.get(status, "⚪")
 
 
+def get_model_type(filename: str) -> str:
+    """Determine model type based on filename."""
+    return "YOLO (Detection)" if "yolo" in filename.lower() else "UNet (Segmentation)"
+
+
 # ── Sidebar ────────────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -154,8 +159,8 @@ with st.sidebar:
 
 # ── Header ─────────────────────────────────────────────────────────────────
 
-st.markdown('<div class="main-header">🧠 Acute Ischemic Stroke Segmentation</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Upload DICOM atau 2D image untuk segmentasi lesi otomatis via UNet</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🧠 Acute Ischemic Stroke Analysis</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Upload DICOM atau 2D image untuk analisis stroke otomatis (mendukung UNet dan YOLO)</div>', unsafe_allow_html=True)
 
 
 # ── Tabs ───────────────────────────────────────────────────────────────────
@@ -190,6 +195,14 @@ with tab_submit:
             repo_id = model.get("repo_id", "")
             filename = model.get("filename", "")
             model_id_or_path = f"{repo_id}/{filename}" if repo_id and filename else "unet"
+
+            # Display model type and description
+            model_type = get_model_type(filename)
+            st.caption(f"Tipe Model: {model_type}")
+            if "yolo" in filename.lower():
+                st.caption("YOLO: Deteksi bounding box lesi stroke")
+            else:
+                st.caption("UNet: Segmentasi pixel-level lesi stroke")
 
         uploaded = st.file_uploader(
             f"Pilih file ({', '.join(ACCEPTED_EXT[job_type])})",

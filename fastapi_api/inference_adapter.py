@@ -200,7 +200,7 @@ def infer_2d_image_yolo(
     runs_dir: Path,
     device: str = "cpu",
 ) -> dict:
-    """Run single 2D image inference using YOLO segmentation model.
+    """Run single 2D image inference using YOLO detection model.
 
     image_path: path to the uploaded image file
     run_id: unique identifier for this job
@@ -208,8 +208,9 @@ def infer_2d_image_yolo(
     runs_dir: base directory for output runs
     device: 'cuda' or 'cpu'
     """
+    import json
     import numpy as np
-    from PIL import Image
+    from PIL import Image, ImageDraw
 
     try:
         from ultralytics import YOLO
@@ -239,45 +240,44 @@ def infer_2d_image_yolo(
         verbose=False,
     )
 
-    mask = np.zeros(arr.shape[:2], dtype=np.uint8)
-    if results and results[0].masks is not None:
-        masks_data = results[0].masks.data.cpu().numpy()
-        if len(masks_data) > 0:
-            combined = np.any(masks_data > 0.5, axis=0).astype(np.uint8)
-            if combined.shape != arr.shape[:2]:
-                mask_img = Image.fromarray((combined * 255).astype(np.uint8))
-                mask_img = mask_img.resize(
-                    (arr.shape[1], arr.shape[0]), resample=Image.NEAREST
-                )
-                combined = (np.array(mask_img) > 127).astype(np.uint8)
-            mask = combined
+    bboxes = []
+    overlay = arr.copy()
 
-    lesion_px = int(mask.sum())
+    if results and results[0].boxes is not None:
+        boxes = results[0].boxes
+        for box in boxes:
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+            conf = float(box.conf[0].cpu().numpy())
+            bboxes.append({
+                "x_min": int(round(x1)),
+                "y_min": int(round(y1)),
+                "x_max": int(round(x2)),
+                "y_max": int(round(y2)),
+                "confidence": round(conf, 4),
+            })
+            # Draw bounding box on overlay
+            import cv2
+            cv2.rectangle(overlay, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 3)
 
     Image.fromarray(arr).save(out_dir / "input.png", optimize=True)
-    Image.fromarray((mask * 255).astype(np.uint8)).save(out_dir / "mask_pred.png", optimize=True)
 
-    rgb_arr = arr.astype(np.float32)
-    alpha = 0.35
-    m = mask.astype(bool)
-    if m.any():
-        overlay = np.zeros_like(rgb_arr)
-        overlay[..., 0] = 255.0
-        overlay[..., 1] = 70.0
-        overlay[..., 2] = 70.0
-        rgb_arr[m] = (1.0 - alpha) * rgb_arr[m] + alpha * overlay[m]
-    Image.fromarray(np.clip(rgb_arr, 0, 255).astype(np.uint8)).save(
-        out_dir / "overlay.png", optimize=True
-    )
+    # Save bboxes JSON
+    bboxes_path = out_dir / "bboxes.json"
+    bboxes_path.write_text(json.dumps(bboxes, indent=2), encoding="utf-8")
+
+    # Save overlay with bounding boxes
+    Image.fromarray(overlay).save(out_dir / "overlay.png", optimize=True)
 
     result = {
         "run_id": run_id,
         "out_dir": str(out_dir),
         "input_name": image_path.name,
         "original_png": "input.png",
-        "mask_png": "mask_pred.png",
+        "bboxes_json": "bboxes.json",
         "overlay_png": "overlay.png",
-        "lesion_pixels": lesion_px,
+        "bboxes": bboxes,
+        "detection_count": len(bboxes),
+        "avg_confidence": round(float(np.mean([b["confidence"] for b in bboxes])), 4) if bboxes else 0.0,
         "shape_hw": [int(arr.shape[0]), int(arr.shape[1])],
         "enable_3d": False,
         "device": device,
@@ -293,17 +293,18 @@ def infer_single_dicom_yolo(
     runs_dir: Path,
     device: str = "cpu",
 ) -> dict:
-    """Run single DICOM inference using YOLO (HU windowing → YOLO predict)."""
+    """Run single DICOM inference using YOLO detection (HU windowing → YOLO predict)."""
+    import json
     import numpy as np
     import pydicom
-    from PIL import Image
+    from PIL import Image, ImageDraw
 
     try:
         from ultralytics import YOLO
     except ImportError:
         raise InferenceError("ultralytics not installed. Run: pip install ultralytics")
 
-    from unet_segmentation.dicom_pipeline import postprocess_mask2d, window_hu
+    from unet_segmentation.dicom_pipeline import window_hu
 
     if not model_path.exists():
         raise InferenceError(f"YOLO model not found: {model_path}")
@@ -334,46 +335,44 @@ def infer_single_dicom_yolo(
     yolo_model = YOLO(str(model_path))
     results = yolo_model.predict(source=rgb, device=device, verbose=False)
 
-    mask = np.zeros(arr_u8.shape, dtype=np.uint8)
-    if results and results[0].masks is not None:
-        masks_data = results[0].masks.data.cpu().numpy()
-        if len(masks_data) > 0:
-            combined = np.any(masks_data > 0.5, axis=0).astype(np.uint8)
-            if combined.shape != arr_u8.shape:
-                mask_img = Image.fromarray((combined * 255).astype(np.uint8))
-                mask_img = mask_img.resize(
-                    (arr_u8.shape[1], arr_u8.shape[0]), resample=Image.NEAREST
-                )
-                combined = (np.array(mask_img) > 127).astype(np.uint8)
-            mask = combined
+    bboxes = []
+    overlay = rgb.copy()
 
-    mask = postprocess_mask2d(mask, min_area=64, closing_radius=2)
-    lesion_px = int(mask.sum())
+    if results and results[0].boxes is not None:
+        boxes = results[0].boxes
+        for box in boxes:
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+            conf = float(box.conf[0].cpu().numpy())
+            bboxes.append({
+                "x_min": int(round(x1)),
+                "y_min": int(round(y1)),
+                "x_max": int(round(x2)),
+                "y_max": int(round(y2)),
+                "confidence": round(conf, 4),
+            })
+            # Draw bounding box on overlay
+            import cv2
+            cv2.rectangle(overlay, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 3)
 
     Image.fromarray(arr_u8).save(out_dir / "input.png", optimize=True)
-    Image.fromarray((mask * 255).astype(np.uint8)).save(out_dir / "mask_pred.png", optimize=True)
 
-    rgb_arr = np.stack([arr_u8, arr_u8, arr_u8], axis=-1).astype(np.float32)
-    alpha = 0.35
-    m = mask.astype(bool)
-    if m.any():
-        overlay = np.zeros_like(rgb_arr)
-        overlay[..., 0] = 255.0
-        overlay[..., 1] = 70.0
-        overlay[..., 2] = 70.0
-        rgb_arr[m] = (1.0 - alpha) * rgb_arr[m] + alpha * overlay[m]
-    Image.fromarray(np.clip(rgb_arr, 0, 255).astype(np.uint8)).save(
-        out_dir / "overlay.png", optimize=True
-    )
+    # Save bboxes JSON
+    bboxes_path = out_dir / "bboxes.json"
+    bboxes_path.write_text(json.dumps(bboxes, indent=2), encoding="utf-8")
+
+    # Save overlay with bounding boxes
+    Image.fromarray(overlay).save(out_dir / "overlay.png", optimize=True)
 
     return {
         "run_id": run_id,
         "out_dir": str(out_dir),
         "input_name": dicom_path.name,
         "original_png": "input.png",
-        "mask_png": "mask_pred.png",
+        "bboxes_json": "bboxes.json",
         "overlay_png": "overlay.png",
-        "lesion_pixels": lesion_px,
+        "bboxes": bboxes,
+        "detection_count": len(bboxes),
+        "avg_confidence": round(float(np.mean([b["confidence"] for b in bboxes])), 4) if bboxes else 0.0,
         "shape_hw": [int(arr_u8.shape[0]), int(arr_u8.shape[1])],
         "enable_3d": False,
         "device": device,
@@ -471,59 +470,55 @@ def infer_dicom_series_yolo(
 
     # Per-slice YOLO inference
     yolo_model = YOLO(str(model_path))
-    masks = np.zeros_like(vol01, dtype=np.uint8)
+    all_bboxes = []
+    ct_u8 = np.clip(vol01 * 255.0, 0, 255).round().astype(np.uint8)
+    overlay_dir = out_dir / "overlay_slices"
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+
     for i in range(vol01.shape[0]):
         slice_u8 = np.clip(vol01[i] * 255.0, 0, 255).astype(np.uint8)
         rgb = np.stack([slice_u8, slice_u8, slice_u8], axis=-1)
         results = yolo_model.predict(source=rgb, device=device, verbose=False)
-        mask2d = np.zeros(slice_u8.shape, dtype=np.uint8)
-        if results and results[0].masks is not None:
-            masks_data = results[0].masks.data.cpu().numpy()
-            if len(masks_data) > 0:
-                combined = np.any(masks_data > 0.5, axis=0).astype(np.uint8)
-                if combined.shape != slice_u8.shape:
-                    mask_img = Image.fromarray((combined * 255).astype(np.uint8))
-                    mask_img = mask_img.resize(
-                        (slice_u8.shape[1], slice_u8.shape[0]), resample=Image.NEAREST
-                    )
-                    combined = (np.array(mask_img) > 127).astype(np.uint8)
-                mask2d = combined
-        masks[i] = postprocess_mask2d(mask2d, min_area=64, closing_radius=2)
 
-    voxel_mm3 = float(ps_row * ps_col * ps_z)
-    lesion_vox = int(masks.sum())
-    lesion_mm3 = float(lesion_vox * voxel_mm3)
-    lesion_ml = lesion_mm3 / 1000.0
+        overlay = rgb.copy()
+        bboxes = []
+        if results and results[0].boxes is not None:
+            boxes = results[0].boxes
+            for box in boxes:
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                conf = float(box.conf[0].cpu().numpy())
+                bboxes.append({
+                    "x_min": int(round(x1)),
+                    "y_min": int(round(y1)),
+                    "x_max": int(round(x2)),
+                    "y_max": int(round(y2)),
+                    "confidence": round(conf, 4),
+                })
+                import cv2
+                cv2.rectangle(overlay, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 3)
+
+        all_bboxes.extend(bboxes)
+        Image.fromarray(overlay).save(overlay_dir / f"{i:04d}.png", optimize=True)
 
     # 3D mesh
     hu_mesh = None
-    lesion_mesh = None
     mesh_ply_name = ""
     mesh_3d_zip = ""
     if enable_3d:
         mesh_max_dim = 100
         hu_volume_for_mesh, stride = _downsample_volume(hu_vol, max_dim=mesh_max_dim)
-        mask_for_mesh = masks.astype(np.float32)[::stride, ::stride, ::stride]
         mesh_spacing = (stride * ps_row, stride * ps_col, stride * ps_z)
         hu_level = float(np.percentile(hu_volume_for_mesh, 60))
         hu_surf = _marching_surface(hu_volume_for_mesh, mesh_spacing, hu_level)
-        lesion_surf = (
-            _marching_surface(mask_for_mesh, mesh_spacing, 0.5) if lesion_vox > 0 else None
-        )
         hu_mesh = _mesh_to_json_from_surface(*hu_surf) if hu_surf else None
-        lesion_mesh = _mesh_to_json_from_surface(*lesion_surf) if lesion_surf else None
 
         ct_rgb = (188, 200, 218)
-        lesion_rgb = (234, 88, 12)
-        mesh_ply_name = "mesh_ct_lesion_colored.ply"
+        mesh_ply_name = "mesh_ct_colored.ply"
         ply_parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int]]] = []
         obj_parts: list[tuple[np.ndarray, np.ndarray, tuple[int, int, int], str]] = []
         if hu_surf:
             ply_parts.append((*hu_surf, ct_rgb))
             obj_parts.append((*hu_surf, ct_rgb, "ct_surface"))
-        if lesion_surf:
-            ply_parts.append((*lesion_surf, lesion_rgb))
-            obj_parts.append((*lesion_surf, lesion_rgb, "lesion_mask"))
         if ply_parts:
             _write_colored_combined_ply(out_dir / mesh_ply_name, ply_parts)
             zname = _write_colored_obj_zip(out_dir, obj_parts)
@@ -533,49 +528,28 @@ def infer_dicom_series_yolo(
             mesh_ply_name = ""
 
         np.save(out_dir / "hu_volume.npy", hu_vol)
-        np.save(out_dir / "mask_pred.npy", masks)
 
-    # NIfTI output
+    # NIfTI output (CT only, no mask for detection)
     affine, _ = dicom_affine_from_slices(slices)
     ct_hu_nii_path = out_dir / "ct_hu.nii.gz"
     ct_nii_path = out_dir / "ct_window_u8.nii.gz"
-    mask_nii_path = out_dir / "mask_pred.nii.gz"
     nib.save(nib.Nifti1Image(hu_vol.astype(np.float32), affine), str(ct_hu_nii_path))
-    ct_u8 = np.clip(vol01 * 255.0, 0, 255).round().astype(np.uint8)
     nib.save(nib.Nifti1Image(ct_u8, affine), str(ct_nii_path))
-    nib.save(nib.Nifti1Image(masks.astype(np.uint8), affine), str(mask_nii_path))
+
+    # Save bboxes JSON with slice info
+    bboxes_path = out_dir / "bboxes.json"
+    bboxes_path.write_text(json.dumps(all_bboxes, indent=2), encoding="utf-8")
 
     ct_view_nii_path = out_dir / "ct_view_u8_hwz.nii.gz"
-    mask_view_nii_path = out_dir / "mask_view_hwz.nii.gz"
     ct_hwz = ct_u8.transpose(1, 2, 0)
-    mask_hwz = masks.transpose(1, 2, 0)
     affine_view = np.eye(4, dtype=np.float64)
     affine_view[0, 0] = float(ps_col)
     affine_view[1, 1] = float(ps_row)
     affine_view[2, 2] = float(ps_z)
     nib.save(nib.Nifti1Image(ct_hwz.astype(np.uint8), affine_view), str(ct_view_nii_path))
-    nib.save(
-        nib.Nifti1Image((mask_hwz.astype(np.uint8) * 255), affine_view),
-        str(mask_view_nii_path),
-    )
 
-    # Per-slice overlay PNGs
-    overlay_dir = out_dir / "overlay_slices"
-    overlay_dir.mkdir(parents=True, exist_ok=True)
-    alpha = 0.35
-    for z in range(ct_u8.shape[0]):
-        gray = ct_u8[z]
-        rgb_arr = np.stack([gray, gray, gray], axis=-1).astype(np.float32)
-        m = masks[z].astype(bool)
-        if m.any():
-            ov = np.zeros_like(rgb_arr)
-            ov[..., 0] = 255.0
-            ov[..., 1] = 70.0
-            ov[..., 2] = 70.0
-            rgb_arr[m] = (1.0 - alpha) * rgb_arr[m] + alpha * ov[m]
-        Image.fromarray(np.clip(rgb_arr, 0, 255).astype(np.uint8)).save(
-            overlay_dir / f"{z:04d}.png", optimize=True
-        )
+    detection_count = len(all_bboxes)
+    avg_confidence = round(float(np.mean([b["confidence"] for b in all_bboxes])), 4) if all_bboxes else 0.0
 
     result = {
         "run_id": run_id,
@@ -583,22 +557,20 @@ def infer_dicom_series_yolo(
         "out_dir": str(out_dir),
         "ct_nii": ct_nii_path.name,
         "ct_hu_nii": ct_hu_nii_path.name,
-        "mask_nii": mask_nii_path.name,
         "ct_view_nii": ct_view_nii_path.name,
-        "mask_view_nii": mask_view_nii_path.name,
         "overlay_slices_dir": overlay_dir.name,
         "dicom_series_dir": dicom_series_dir.name,
         "dicom_series_zip": dicom_zip_path.name,
         "mesh_ply_colored": mesh_ply_name,
         "mesh_3d_colored_zip": mesh_3d_zip,
-        "lesion_voxels": lesion_vox,
-        "lesion_volume_mm3": round(lesion_mm3, 2),
-        "lesion_volume_ml": round(lesion_ml, 4),
+        "bboxes_json": "bboxes.json",
+        "bboxes": all_bboxes,
+        "detection_count": detection_count,
+        "avg_confidence": avg_confidence,
         "spacing": (ps_row, ps_col, ps_z),
-        "slices": masks.shape[0],
-        "shape_hw": (masks.shape[1], masks.shape[2]),
+        "slices": vol01.shape[0],
+        "shape_hw": (vol01.shape[1], vol01.shape[2]),
         "hu_mesh": hu_mesh,
-        "lesion_mesh": lesion_mesh,
         "enable_3d": enable_3d,
         "device": device,
         "archive_name": archive_path.name,
